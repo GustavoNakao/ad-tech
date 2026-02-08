@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerador de Kits</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; }
+        .card-main { max-width: 600px; margin: 50px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .status-box { min-height: 150px; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card card-main bg-white rounded p-4">
+        <h3 class="text-center mb-4 text-primary">🤖 Robô Gerador de Kits</h3>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% if status == "AGUARDANDO" or status == "SUCESSO_AUTO" %}
+            <div class="text-center py-5">
+                <form method="POST">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="analisar">
+                    <button type="submit" class="btn btn-lg btn-success w-100 p-4 fw-bold">
+                        🚀 RODAR PROCESSO
+                    </button>
+                    <p class="text-muted mt-2">O robô vai buscar o próximo item pendente.</p>
+                </form>
+            </div>
+
+            <form method="POST" class="mb-3 text-end">
+                {% csrf_token %}
+                <input type="hidden" name="acao" value="calibrar">
+                <button type="submit" class="btn btn-sm btn-outline-info" title="Sincronizar numeração com o BaseLinker">
+                    🔄 Sincronizar Contador
+                </button>
+            </form>
+
+            <!-- Formulário manual: permite criar por SKU apenas -->
+            <div class="mb-4 border rounded p-3 bg-light">
+                <form method="POST" class="row g-2 align-items-center">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="criar_manual">
+                    <div class="col-9">
+                        <input type="text" name="sku_manual" class="form-control" placeholder="SKU desejado (ex: 30565)">
+                    </div>
+                    <div class="col-3 text-end">
+                        <button type="submit" class="btn btn-primary">Criar</button>
+                    </div>
+                </form>
+                <small class="text-muted">Informe apenas o SKU; o sistema buscará o produto correspondente e criará o kit.</small>
+            </div>
+
+            {% if status == "SUCESSO_AUTO" %}
+                {% endif %}
+
+        {% elif status == "FIM" %}
+             <div class="text-center py-5">
+                <h2 class="text-success">🏁 Tudo Limpo!</h2>
+                <p>Não há mais produtos novos para criar.</p>
+                <form method="POST">
+                    {% csrf_token %}
+                    <button type="submit" name="acao" value="analisar" class="btn btn-primary">Verificar Novamente</button>
+                    <button type="submit" name="acao" value="limpar_sessao" class="btn btn-outline-secondary">Resetar Ignorados</button>
+                </form>
+            </div>
+
+        {% elif status == "DUPLICADO" %}
+            <div class="border border-warning rounded p-4 bg-light">
+                <h4 class="text-warning fw-bold">⚠️ Conflito Detectado</h4>
+                <p>O produto <strong>{{ dados.sku_origem }}</strong> já possui um kit ativo ({{ dados.sku_existente }}).</p>
+                <p class="mb-4">Deseja criar uma duplicata mesmo assim?</p>
+
+                <div class="d-flex gap-2 justify-content-center">
+                    <form method="POST" class="w-50">
+                        {% csrf_token %}
+                        <input type="hidden" name="acao" value="pular">
+                        <input type="hidden" name="pid" value="{{ dados.pid }}">
+                        <button type="submit" class="btn btn-secondary w-100">
+                            ⛔ Não (Pular)
+                        </button>
+                    </form>
+
+                    <form method="POST" class="w-50">
+                        {% csrf_token %}
+                        <input type="hidden" name="acao" value="criar_duplicado">
+                        <input type="hidden" name="pid" value="{{ dados.pid }}">
+                        <input type="hidden" name="sku_origem" value="{{ dados.sku_origem }}">
+                        <button type="submit" class="btn btn-danger w-100">
+                            🔥 Sim, Criar!
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+        {% elif status == "ERRO" %}
+             <div class="alert alert-danger">
+                 <h4>Erro Crítico</h4>
+                 <p>{{ dados.msg }}</p>
+                 <a href="{% url 'painel_kits' %}" class="btn btn-primary">Voltar</a>
+             </div>
+        {% endif %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

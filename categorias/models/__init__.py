@@ -1,0 +1,1 @@
+from .categoria_baselinker import CategoriaBaselinker

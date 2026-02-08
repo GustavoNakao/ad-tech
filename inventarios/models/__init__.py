@@ -1,0 +1,2 @@
+from .armazem_baselinker import ArmazemBaselinker
+from .inventario_baselinker import InventarioBaselinker
