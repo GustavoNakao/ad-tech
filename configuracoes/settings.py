@@ -31,12 +31,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
     'baselinker_integracao',
     'categorias.apps.CategoriasConfig',
     'inventarios',
     'criacao_estruturado',
     'core',
+    'pedidos',
+    'devolucoes',
+    'envios',
 ]
 
 MIDDLEWARE = [
@@ -49,8 +51,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'Configuracoes.urls'
-WSGI_APPLICATION = 'Configuracoes.wsgi.application'
+ROOT_URLCONF = 'configuracoes.urls'
+WSGI_APPLICATION = 'configuracoes.wsgi.application'
 
 TEMPLATES = [
     {
@@ -95,3 +97,25 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'   # importante para produção
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ====================== LOGGING (SKU Kits) ======================
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'gerador_kits': {
+            'format': '[%(asctime)s] %(levelname)s %(name)s %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'gerador_kits',
+        },
+    },
+    'loggers': {
+        'gerador_kits': {'level': 'INFO', 'handlers': ['console']},
+        'gerador_kits.metrics': {'level': 'INFO', 'handlers': ['console']},
+    },
+}

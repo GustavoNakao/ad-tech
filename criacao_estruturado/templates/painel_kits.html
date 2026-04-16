@@ -2,116 +2,301 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Gerador de Kits</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle | Robô de Kits</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
     <style>
-        body { background-color: #f4f6f9; }
-        .card-main { max-width: 600px; margin: 50px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .status-box { min-height: 150px; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+        :root {
+            /* Paleta Dark Mode Moderna */
+            --bg-body: #0f172a;       /* Fundo super escuro */
+            --bg-card: #1e293b;       /* Fundo dos cards */
+            --text-primary: #f8fafc;  /* Texto claro */
+            --text-secondary: #94a3b8; /* Texto cinza */
+            --accent: #3b82f6;        /* Azul vibrante */
+            --success: #10b981;       /* Verde vibrante */
+            --border: #334155;        /* Bordas sutis */
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
+            min-height: 100vh;
+        }
+
+        /* Navbar estilizada */
+        .navbar {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: white !important;
+        }
+
+        /* Cards modernos */
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            margin-bottom: 24px;
+        }
+
+        .card-header {
+            background-color: transparent;
+            border-bottom: 1px solid var(--border);
+            padding: 1.5rem;
+            font-weight: 600;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Inputs Dark */
+        .form-control {
+            background-color: #0f172a;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 0.75rem 1rem;
+        }
+
+        .form-control:focus {
+            background-color: #0f172a;
+            border-color: var(--accent);
+            color: white;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+
+        .form-control::placeholder {
+            color: #475569;
+        }
+
+        /* Botões com Gradiente */
+        .btn-run {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 1rem;
+            transition: all 0.2s;
+        }
+        .btn-run:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -10px rgba(16, 185, 129, 0.5);
+            color: white;
+        }
+
+        .btn-manual {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border: none;
+            font-weight: 600;
+        }
+
+        /* Alertas e Status */
+        .alert-custom {
+            border-radius: 12px;
+            border: none;
+            background-color: var(--bg-card);
+            border-left: 4px solid;
+        }
+        .status-box {
+            background: #0f172a;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        /* Utilitários */
+        .text-dim { color: var(--text-secondary); }
+        .divider { border-top: 1px solid var(--border); margin: 2rem 0; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="card card-main bg-white rounded p-4">
-        <h3 class="text-center mb-4 text-primary">🤖 Robô Gerador de Kits</h3>
+    <nav class="navbar navbar-expand-lg sticky-top mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fa-solid fa-layer-group me-2 text-primary"></i>
+                S-Produto <span class="text-dim fw-normal">| Gerador de Kits</span>
+            </a>
+            <div class="d-flex align-items-center">
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2 rounded-pill">
+                    <i class="fa-solid fa-circle-check me-1"></i> Sistema Ativo
+                </span>
+            </div>
+        </div>
+    </nav>
 
+    <div class="container">
+        
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-                    {{ message }}
+                <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show shadow-lg" role="alert">
+                    <i class="fa-solid fa-bell me-2"></i> {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             {% endfor %}
         {% endif %}
 
-        {% if status == "AGUARDANDO" or status == "SUCESSO_AUTO" %}
-            <div class="text-center py-5">
-                <form method="POST">
-                    {% csrf_token %}
-                    <input type="hidden" name="acao" value="analisar">
-                    <button type="submit" class="btn btn-lg btn-success w-100 p-4 fw-bold">
-                        🚀 RODAR PROCESSO
-                    </button>
-                    <p class="text-muted mt-2">O robô vai buscar o próximo item pendente.</p>
-                </form>
-            </div>
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
 
-            <form method="POST" class="mb-3 text-end">
-                {% csrf_token %}
-                <input type="hidden" name="acao" value="calibrar">
-                <button type="submit" class="btn btn-sm btn-outline-info" title="Sincronizar numeração com o BaseLinker">
-                    🔄 Sincronizar Contador
-                </button>
-            </form>
+                <div class="card main-card">
+                    
+                    {% if status == "AGUARDANDO" or status == "SUCESSO_AUTO" %}
+                        <div class="card-header">
+                            <i class="fa-solid fa-robot"></i> Central de Comando
+                        </div>
+                        <div class="card-body">
+                            
+                            <div class="status-box mb-4">
+                                <h5 class="mb-3 text-white">Análise Automática</h5>
+                                <p class="text-dim small mb-4">O robô irá buscar o próximo produto pendente na fila e criar o kit automaticamente.</p>
+                                
+                                <form method="POST">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="acao" value="analisar">
+                                    <button type="submit" class="btn btn-run w-100 rounded-pill">
+                                        <i class="fa-solid fa-play me-2"></i> RODAR PROCESSO AGORA
+                                    </button>
+                                </form>
+                            </div>
 
-            <!-- Formulário manual: permite criar por SKU apenas -->
-            <div class="mb-4 border rounded p-3 bg-light">
-                <form method="POST" class="row g-2 align-items-center">
-                    {% csrf_token %}
-                    <input type="hidden" name="acao" value="criar_manual">
-                    <div class="col-9">
-                        <input type="text" name="sku_manual" class="form-control" placeholder="SKU desejado (ex: 30565)">
-                    </div>
-                    <div class="col-3 text-end">
-                        <button type="submit" class="btn btn-primary">Criar</button>
-                    </div>
-                </form>
-                <small class="text-muted">Informe apenas o SKU; o sistema buscará o produto correspondente e criará o kit.</small>
-            </div>
+                            <div class="mt-4">
+                                <label class="form-label text-white fw-bold">
+                                    <i class="fa-solid fa-pen-to-square text-primary me-2"></i>Criação Manual Específica
+                                </label>
+                                <form method="POST" class="row g-2">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="acao" value="criar_manual">
+                                    <div class="col-md-9">
+                                        <input type="text" name="sku_manual" class="form-control form-control-lg" placeholder="Digite o SKU do produto (ex: 30565)">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="submit" class="btn btn-primary btn-manual w-100 h-100">
+                                            <i class="fa-solid fa-plus"></i> Criar
+                                        </button>
+                                    </div>
+                                </form>
+                                <small class="text-dim mt-2 d-block">
+                                    * Use apenas para forçar a criação de um SKU específico fora da fila.
+                                </small>
+                            </div>
 
-            {% if status == "SUCESSO_AUTO" %}
-                {% endif %}
+                            <div class="divider"></div>
 
-        {% elif status == "FIM" %}
-             <div class="text-center py-5">
-                <h2 class="text-success">🏁 Tudo Limpo!</h2>
-                <p>Não há mais produtos novos para criar.</p>
-                <form method="POST">
-                    {% csrf_token %}
-                    <button type="submit" name="acao" value="analisar" class="btn btn-primary">Verificar Novamente</button>
-                    <button type="submit" name="acao" value="limpar_sessao" class="btn btn-outline-secondary">Resetar Ignorados</button>
-                </form>
-            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-dim small"><i class="fa-solid fa-database me-1"></i> BaseLinker API Connected</span>
+                                <form method="POST">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="acao" value="calibrar">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary text-dim border-0">
+                                        <i class="fa-solid fa-sync me-1"></i> Recalibrar Contador
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
 
-        {% elif status == "DUPLICADO" %}
-            <div class="border border-warning rounded p-4 bg-light">
-                <h4 class="text-warning fw-bold">⚠️ Conflito Detectado</h4>
-                <p>O produto <strong>{{ dados.sku_origem }}</strong> já possui um kit ativo ({{ dados.sku_existente }}).</p>
-                <p class="mb-4">Deseja criar uma duplicata mesmo assim?</p>
+                    {% elif status == "FIM" %}
+                        <div class="card-body text-center py-5">
+                            <div class="mb-4">
+                                <i class="fa-solid fa-check-circle text-success" style="font-size: 5rem; text-shadow: 0 0 30px rgba(16, 185, 129, 0.4);"></i>
+                            </div>
+                            <h2 class="text-white mb-2">Tudo Limpo!</h2>
+                            <p class="text-dim mb-4">Não existem mais produtos pendentes na fila de estruturados.</p>
+                            
+                            <div class="d-flex justify-content-center gap-3">
+                                <form method="POST">
+                                    {% csrf_token %}
+                                    <button type="submit" name="acao" value="analisar" class="btn btn-primary px-4">
+                                        <i class="fa-solid fa-rotate-right me-2"></i> Verificar Novamente
+                                    </button>
+                                </form>
+                                <form method="POST">
+                                    {% csrf_token %}
+                                    <button type="submit" name="acao" value="limpar_sessao" class="btn btn-outline-secondary px-4">
+                                        Limpar Cache
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
 
-                <div class="d-flex gap-2 justify-content-center">
-                    <form method="POST" class="w-50">
-                        {% csrf_token %}
-                        <input type="hidden" name="acao" value="pular">
-                        <input type="hidden" name="pid" value="{{ dados.pid }}">
-                        <button type="submit" class="btn btn-secondary w-100">
-                            ⛔ Não (Pular)
-                        </button>
-                    </form>
+                    {% elif status == "DUPLICADO" %}
+                        <div class="card-header text-warning border-warning">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Conflito Detectado
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-dark border border-warning d-flex align-items-center mb-4">
+                                <i class="fa-solid fa-circle-info text-warning fs-3 me-3"></i>
+                                <div>
+                                    <h5 class="text-warning mb-1">Kit Já Existente</h5>
+                                    <p class="mb-0 text-dim">O produto original <strong>{{ dados.sku_origem }}</strong> já possui um kit vinculado ({{ dados.sku_existente }}).</p>
+                                </div>
+                            </div>
 
-                    <form method="POST" class="w-50">
-                        {% csrf_token %}
-                        <input type="hidden" name="acao" value="criar_duplicado">
-                        <input type="hidden" name="pid" value="{{ dados.pid }}">
-                        <input type="hidden" name="sku_origem" value="{{ dados.sku_origem }}">
-                        <button type="submit" class="btn btn-danger w-100">
-                            🔥 Sim, Criar!
-                        </button>
-                    </form>
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <form method="POST">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="acao" value="pular">
+                                        <input type="hidden" name="pid" value="{{ dados.pid }}">
+                                        <button type="submit" class="btn btn-outline-secondary w-100 py-3">
+                                            <i class="fa-solid fa-forward me-2"></i> Ignorar e Pular
+                                        </button>
+                                    </form>
+                                </div>
+                                <div class="col-6">
+                                    <form method="POST">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="acao" value="criar_duplicado">
+                                        <input type="hidden" name="pid" value="{{ dados.pid }}">
+                                        <input type="hidden" name="sku_origem" value="{{ dados.sku_origem }}">
+                                        <button type="submit" class="btn btn-danger w-100 py-3">
+                                            <i class="fa-solid fa-clone me-2"></i> Forçar Duplicata
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                    {% elif status == "ERRO" %}
+                        <div class="card-header text-danger border-danger">
+                            <i class="fa-solid fa-bug"></i> Erro na Execução
+                        </div>
+                        <div class="card-body text-center py-4">
+                            <div class="mb-3">
+                                <i class="fa-solid fa-xmark-circle text-danger" style="font-size: 4rem;"></i>
+                            </div>
+                            <h5 class="text-white mb-3">Ocorreu um problema</h5>
+                            <div class="alert alert-dark border border-danger text-start d-inline-block">
+                                <code>{{ dados.msg }}</code>
+                            </div>
+                            <div class="mt-4">
+                                <a href="{% url 'painel_kits' %}" class="btn btn-light px-4">
+                                    <i class="fa-solid fa-arrow-left me-2"></i> Voltar ao Painel
+                                </a>
+                            </div>
+                        </div>
+                    {% endif %}
+
                 </div>
             </div>
-
-        {% elif status == "ERRO" %}
-             <div class="alert alert-danger">
-                 <h4>Erro Crítico</h4>
-                 <p>{{ dados.msg }}</p>
-                 <a href="{% url 'painel_kits' %}" class="btn btn-primary">Voltar</a>
-             </div>
-        {% endif %}
+        </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
