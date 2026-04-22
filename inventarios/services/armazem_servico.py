@@ -1,5 +1,5 @@
 from typing import Dict
-from baselinker_integracao.client import BaselinkerClient
+from integracoes.baselinker.client import BaselinkerClient
 from ..models.armazem_baselinker import ArmazemBaselinker
 
 

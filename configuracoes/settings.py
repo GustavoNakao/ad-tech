@@ -1,5 +1,6 @@
 """
 Django settings for Configuracoes project – versão 2025 segura
+
 """
 from pathlib import Path
 from decouple import config, Csv
@@ -12,6 +13,7 @@ BASELINK_TOKEN = config('BASELINKER_TOKEN')
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ====================== SEGURANÇA ======================
+
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv(), default='localhost')
@@ -21,6 +23,10 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv(), default='localhost')
 
 BASELINKER_TOKEN = config('BASELINKER_TOKEN')
 
+GS1_CLIENT_ID     = config('GS1_CLIENT_ID')
+GS1_CLIENT_SECRET = config('GS1_CLIENT_SECRET')
+GS1_API_KEY       = config('GS1_API_KEY')
+GEMINI_API_KEY    = config('GEMINI_API_KEY')
 
 # ====================== APLICAÇÃO ======================
 INSTALLED_APPS = [
@@ -31,7 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'baselinker_integracao',
+    'baselinker',
     'categorias.apps.CategoriasConfig',
     'inventarios',
     'criacao_estruturado',

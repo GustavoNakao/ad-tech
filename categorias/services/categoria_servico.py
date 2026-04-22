@@ -4,7 +4,7 @@ import logging
 from typing import Dict, Any, List
 from django.utils import timezone
 
-from baselinker_integracao.client import BaselinkerClient
+from integracoes.baselinker.client import BaselinkerClient
 from ..models.categoria_baselinker import CategoriaBaselinker
 
 logger = logging.getLogger(__name__)

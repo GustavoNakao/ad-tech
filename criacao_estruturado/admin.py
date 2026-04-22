@@ -1,5 +1,4 @@
 from django.contrib import admin
-
 from .models import ControleSequencia, NumeroReciclado, HistoricoKit, BaselinkerKitSku
 
 
@@ -11,7 +10,6 @@ class ControleSequenciaAdmin(admin.ModelAdmin):
 @admin.register(NumeroReciclado)
 class NumeroRecicladoAdmin(admin.ModelAdmin):
     list_display = ('numero',)
-    list_filter = ()
     search_fields = ('numero',)
 
 
@@ -19,6 +17,8 @@ class NumeroRecicladoAdmin(admin.ModelAdmin):
 class HistoricoKitAdmin(admin.ModelAdmin):
     list_display = ('sku_kit', 'sku_origem', 'id_origem', 'id_kit', 'criado_em')
     search_fields = ('sku_kit', 'sku_origem')
+    list_filter = ('criado_em',)
+    ordering = ('-criado_em',)
 
 
 @admin.register(BaselinkerKitSku)

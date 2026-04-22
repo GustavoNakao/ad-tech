@@ -107,7 +107,7 @@ class CriadorKitsServiceIntegrationTests(TestCase):
     @patch("criacao_estruturado.services.criador_kits_service.BaselinkerClient")
     def test_executar_criacao_sku_conflict_sync_retry(self, mock_client_cls):
         """Simula conflito SKU -> sync + retry com novo SKU."""
-        from baselinker_integracao.client import BaselinkerAPIError
+        from integracoes.baselinker.client import BaselinkerAPIError
 
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client

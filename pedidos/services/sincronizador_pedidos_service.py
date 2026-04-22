@@ -22,7 +22,7 @@ from typing import Dict, List, Optional
 from django.db import transaction
 from django.utils.timezone import make_aware
 
-from baselinker_integracao.client import BaselinkerClient
+from integracoes.baselinker.client import BaselinkerClient
 from pedidos.models import StatusPedido, Pedido, ItemPedido
 
 logger = logging.getLogger('sincronizador_pedidos')
