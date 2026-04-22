@@ -1,71 +1,73 @@
 from django.db import models
 
+
 class Pedido(models.Model):
-    id_baselinker        = models.BigIntegerField(unique=True)
-    id_pedido_loja       = models.CharField(max_length=100, blank=True)
-    id_pedido_externo    = models.CharField(max_length=50, blank=True)
-    origem               = models.CharField(max_length=20, blank=True)
-    id_origem            = models.CharField(max_length=50, blank=True)
-    
-    # TRUQUE PARA EVITAR ERRO: Usamos o nome da classe como String ('StatusPedido') 
-    # em vez de importar o arquivo status.py.
-    status               = models.ForeignKey('StatusPedido', null=True, blank=True, on_delete=models.SET_NULL)
-    
-    confirmado           = models.BooleanField(default=False)
-    login_usuario        = models.CharField(max_length=100, blank=True)
-    data_criacao         = models.DateTimeField(null=True, blank=True)
-    data_confirmacao     = models.DateTimeField(null=True, blank=True)
-    data_no_status       = models.DateTimeField(null=True, blank=True)
-    email                = models.EmailField(blank=True)
-    telefone             = models.CharField(max_length=100, blank=True)
+    """
+    Representa um pedido importado do BaseLinker via getOrders.
+    Campos escolhidos para cobrir operação, financeiro e entrega.
+    """
+
+    # ── Identificação ──────────────────────────────────────────────────────────
+    id_baselinker     = models.BigIntegerField(unique=True, help_text="order_id da API")
+    id_pedido_loja    = models.CharField(max_length=100, blank=True, help_text="shop_order_id")
+    id_pedido_externo = models.CharField(max_length=100, blank=True, help_text="external_order_id")
+    origem            = models.CharField(max_length=50,  blank=True, help_text="order_source (marketplace/loja)")
+    id_origem         = models.CharField(max_length=50,  blank=True, help_text="order_source_id")
+
+    # ── Status ─────────────────────────────────────────────────────────────────
+    status    = models.ForeignKey(
+        'StatusPedido',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='pedidos',
+    )
+    confirmado = models.BooleanField(default=False)
+
+    # ── Datas ──────────────────────────────────────────────────────────────────
+    data_criacao     = models.DateTimeField(null=True, blank=True, help_text="date_add")
+    data_confirmacao = models.DateTimeField(null=True, blank=True, help_text="date_confirmed")
+    data_no_status   = models.DateTimeField(null=True, blank=True, help_text="date_in_status")
+
+    # ── Cliente ────────────────────────────────────────────────────────────────
+    email    = models.EmailField(blank=True)
+    telefone = models.CharField(max_length=30, blank=True)
+
+    # ── Financeiro ─────────────────────────────────────────────────────────────
+    moeda            = models.CharField(max_length=3, blank=True)
+    valor_pago       = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valor_frete      = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    metodo_pagamento = models.CharField(max_length=100, blank=True)
+
+    # ── Entrega ────────────────────────────────────────────────────────────────
+    metodo_entrega  = models.CharField(max_length=100, blank=True)
+    numero_rastreio = models.CharField(max_length=100, blank=True)
+
+    entrega_nome    = models.CharField(max_length=100, blank=True)
+    entrega_endereco= models.CharField(max_length=255, blank=True)
+    entrega_cep     = models.CharField(max_length=20,  blank=True)
+    entrega_cidade  = models.CharField(max_length=100, blank=True)
+    entrega_estado  = models.CharField(max_length=50,  blank=True)
+    entrega_pais    = models.CharField(max_length=50,  blank=True)
+
+    # ── Nota fiscal ────────────────────────────────────────────────────────────
+    nf_nome     = models.CharField(max_length=200, blank=True)
+    nf_cnpj_cpf = models.CharField(max_length=20,  blank=True)
+    nf_endereco = models.CharField(max_length=255, blank=True)
+    nf_cidade   = models.CharField(max_length=100, blank=True)
+    nf_estado   = models.CharField(max_length=50,  blank=True)
+    nf_cep      = models.CharField(max_length=20,  blank=True)
+
+    # ── Comentários ────────────────────────────────────────────────────────────
     comentario_comprador = models.TextField(blank=True)
     comentario_vendedor  = models.TextField(blank=True)
-    metodo_pagamento     = models.CharField(max_length=100, blank=True)
-    pagamento_cod        = models.BooleanField(default=False)
-    valor_pago           = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    moeda                = models.CharField(max_length=3, blank=True)
-    quer_nota_fiscal     = models.BooleanField(default=False)
-    comissao_liquida     = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    comissao_bruta       = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    moeda_comissao       = models.CharField(max_length=3, blank=True)
-    metodo_entrega       = models.CharField(max_length=100, blank=True)
-    id_metodo_entrega    = models.IntegerField(null=True, blank=True)
-    valor_frete          = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    modulo_pacote        = models.CharField(max_length=20, blank=True)
-    numero_rastreio      = models.CharField(max_length=40, blank=True)
-    entrega_nome         = models.CharField(max_length=100, blank=True)
-    entrega_empresa      = models.CharField(max_length=100, blank=True)
-    entrega_endereco     = models.CharField(max_length=255, blank=True)
-    entrega_cep          = models.CharField(max_length=100, blank=True)
-    entrega_cidade       = models.CharField(max_length=100, blank=True)
-    entrega_estado       = models.CharField(max_length=35, blank=True)
-    entrega_pais         = models.CharField(max_length=50, blank=True)
-    entrega_codigo_pais  = models.CharField(max_length=2, blank=True)
-    ponto_id             = models.CharField(max_length=40, blank=True)
-    ponto_nome           = models.CharField(max_length=100, blank=True)
-    ponto_endereco       = models.CharField(max_length=255, blank=True)
-    ponto_cep            = models.CharField(max_length=100, blank=True)
-    ponto_cidade         = models.CharField(max_length=100, blank=True)
-    nf_nome              = models.CharField(max_length=200, blank=True)
-    nf_empresa           = models.CharField(max_length=200, blank=True)
-    nf_cnpj_cpf          = models.CharField(max_length=100, blank=True)
-    nf_endereco          = models.CharField(max_length=255, blank=True)
-    nf_cep               = models.CharField(max_length=20, blank=True)
-    nf_cidade            = models.CharField(max_length=100, blank=True)
-    nf_estado            = models.CharField(max_length=35, blank=True)
-    nf_pais              = models.CharField(max_length=50, blank=True)
-    nf_codigo_pais       = models.CharField(max_length=2, blank=True)
-    campo_extra_1        = models.CharField(max_length=50, blank=True)
-    campo_extra_2        = models.CharField(max_length=50, blank=True)
-    pagina_pedido        = models.URLField(blank=True)
-    status_coleta        = models.IntegerField(null=True, blank=True)
-    status_embalagem     = models.IntegerField(null=True, blank=True)
-    estrela              = models.IntegerField(default=0)
-    atualizado_em        = models.DateTimeField(auto_now=True)
+
+    # ── Controle interno ───────────────────────────────────────────────────────
+    atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'pedido'
+        db_table     = 'pedido'
         verbose_name = 'Pedido'
+        ordering     = ['-data_criacao']
 
     def __str__(self):
-        return f'Pedido #{self.id_baselinker} - {self.origem}'
+        return f'Pedido #{self.id_baselinker} — {self.origem}'
