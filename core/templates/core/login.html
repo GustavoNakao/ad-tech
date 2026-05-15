@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R831 — Acesso</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:      #060a0f;
+            --surface: #0c1219;
+            --border:  rgba(255,255,255,0.07);
+            --border2: rgba(255,255,255,0.13);
+            --cyan:    #00c8ff;
+            --text:    #dde4ef;
+            --muted:   #4a5a6e;
+            --danger:  #ff4d6d;
+            --fh:      'Syne', sans-serif;
+            --fm:      'DM Mono', monospace;
+        }
+
+        html, body {
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--fm);
+        }
+
+        /* Grid background sutil */
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background-image:
+                linear-gradient(rgba(0,200,255,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,200,255,0.025) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none; z-index: 0;
+        }
+
+        /* Glow central */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 20%; left: 50%; transform: translateX(-50%);
+            width: 500px; height: 300px;
+            background: radial-gradient(ellipse, rgba(0,200,255,0.06) 0%, transparent 70%);
+            pointer-events: none; z-index: 0;
+        }
+
+        .page {
+            position: relative; z-index: 1;
+            min-height: 100vh;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 24px;
+        }
+
+        /* Logo / marca */
+        .marca {
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 40px;
+            animation: fade-down 0.5s ease both;
+        }
+        .logo-box {
+            width: 38px; height: 38px; border-radius: 9px;
+            background: linear-gradient(135deg, #00c8ff, #005fa3);
+            display: flex; align-items: center; justify-content: center;
+            font-family: var(--fh); font-size: 15px; font-weight: 800; color: #04080e;
+        }
+        .marca-nome {
+            font-family: var(--fh); font-weight: 800; font-size: 20px;
+            letter-spacing: -0.3px;
+        }
+        .marca-sep { color: var(--muted); font-size: 13px; font-weight: 400; }
+
+        /* Card */
+        .card {
+            width: 100%; max-width: 380px;
+            background: var(--surface);
+            border: 1px solid var(--border2);
+            border-radius: 16px;
+            padding: 32px 30px;
+            animation: fade-up 0.5s ease 0.1s both;
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+            opacity: 0.5;
+        }
+
+        .card-titulo {
+            font-family: var(--fh); font-size: 15px; font-weight: 700;
+            margin-bottom: 4px; letter-spacing: 0.02em;
+        }
+        .card-sub {
+            font-size: 11.5px; color: var(--muted); margin-bottom: 28px;
+        }
+
+        /* Erro */
+        .erro-box {
+            background: rgba(255,77,109,0.07);
+            border: 1px solid rgba(255,77,109,0.3);
+            border-radius: 9px;
+            padding: 11px 14px;
+            font-size: 12px;
+            color: var(--danger);
+            margin-bottom: 20px;
+            display: flex; align-items: center; gap: 9px;
+            animation: shake 0.35s ease;
+        }
+
+        /* Form */
+        .fg { margin-bottom: 16px; }
+        .fl {
+            display: block;
+            font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px;
+            color: var(--muted); margin-bottom: 8px; font-weight: 500;
+        }
+        .fi {
+            width: 100%;
+            background: #070c13;
+            border: 1px solid var(--border2);
+            border-radius: 9px;
+            color: var(--text);
+            font-family: var(--fm); font-size: 14px;
+            padding: 12px 14px;
+            outline: none;
+            transition: border-color .2s, box-shadow .2s;
+        }
+        .fi::placeholder { color: var(--muted); }
+        .fi:focus {
+            border-color: var(--cyan);
+            box-shadow: 0 0 0 3px rgba(0,200,255,0.08);
+        }
+
+        .btn {
+            width: 100%; margin-top: 8px;
+            background: linear-gradient(135deg, #00c8ff, #007acc);
+            border: none; border-radius: 9px;
+            color: #04080e; font-family: var(--fh); font-weight: 700;
+            font-size: 13.5px; letter-spacing: 0.04em;
+            padding: 13px;
+            cursor: pointer;
+            transition: all .2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px -4px rgba(0,200,255,0.3); }
+        .btn:active { transform: translateY(0); }
+        .btn.loading { opacity: 0.5; pointer-events: none; }
+
+        /* Rodapé */
+        .rodape {
+            margin-top: 30px;
+            font-size: 11px; color: var(--muted);
+            text-align: center;
+            animation: fade-up 0.5s ease 0.25s both;
+        }
+        .rodape span { color: rgba(0,200,255,0.5); }
+
+        /* Lock icon */
+        .lock {
+            display: flex; align-items: center; justify-content: center;
+            width: 36px; height: 36px; border-radius: 8px;
+            background: rgba(0,200,255,0.07); border: 1px solid rgba(0,200,255,0.15);
+            margin-bottom: 20px; font-size: 15px;
+        }
+
+        /* Animações */
+        @keyframes fade-up   { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes fade-down { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes shake {
+            0%,100%{transform:translateX(0)}
+            20%{transform:translateX(-5px)}
+            40%{transform:translateX(5px)}
+            60%{transform:translateX(-3px)}
+            80%{transform:translateX(3px)}
+        }
+
+        .spinner {
+            width: 14px; height: 14px;
+            border: 2px solid rgba(4,8,14,0.3);
+            border-top-color: #04080e;
+            border-radius: 50%;
+            animation: spin .6s linear infinite;
+        }
+        @keyframes spin { to{transform:rotate(360deg)} }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <div class="marca">
+        <div class="logo-box">R</div>
+        <div>
+            <div class="marca-nome">R831</div>
+        </div>
+        <span class="marca-sep">/ Sistema Interno</span>
+    </div>
+
+    <div class="card">
+        <div class="lock">🔐</div>
+        <div class="card-titulo">Acesso Restrito</div>
+        <div class="card-sub">Apenas membros autorizados do time R831.</div>
+
+        {% if erro %}
+        <div class="erro-box">
+            <span>⚠</span> {{ erro }}
+        </div>
+        {% endif %}
+
+        <form method="POST" id="form-login" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+
+            <div class="fg">
+                <label class="fl" for="username">Usuário</label>
+                <input class="fi" type="text" id="username" name="username"
+                       placeholder="seu.usuario" autocomplete="username"
+                       autofocus required>
+            </div>
+
+            <div class="fg">
+                <label class="fl" for="password">Senha</label>
+                <input class="fi" type="password" id="password" name="password"
+                       placeholder="••••••••" autocomplete="current-password" required>
+            </div>
+
+            <button type="submit" class="btn" id="btn-login">
+                Entrar no sistema
+            </button>
+        </form>
+    </div>
+
+    <div class="rodape">
+        Acesso monitorado · <span>R831 © 2025</span>
+    </div>
+
+</div>
+<script>
+document.getElementById('form-login').addEventListener('submit', function(e) {
+    const u = document.getElementById('username').value.trim();
+    const p = document.getElementById('password').value;
+    if (!u || !p) { e.preventDefault(); return; }
+    const btn = document.getElementById('btn-login');
+    btn.classList.add('loading');
+    btn.innerHTML = '<div class="spinner"></div> Verificando...';
+});
+</script>
+</body>
+</html>

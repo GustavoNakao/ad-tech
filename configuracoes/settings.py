@@ -37,7 +37,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'baselinker',
     'categorias.apps.CategoriasConfig',
     'inventarios',
     'criacao_estruturado',
@@ -45,6 +44,9 @@ INSTALLED_APPS = [
     'pedidos',
     'devolucoes',
     'envios',
+    'precificacao',
+    'produtos',
+    'anuncios',
 ]
 
 MIDDLEWARE = [
@@ -55,7 +57,15 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.LoginObrigatorioMiddleware',
 ]
+
+# SEGURANÇA DE SESSÃO
+# Expira a sessão após 30 minutos (1800 segundos)
+SESSION_COOKIE_AGE = 1800
+
+# Derruba a sessão imediatamente se o usuário fechar a aba/navegador
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 ROOT_URLCONF = 'configuracoes.urls'
 WSGI_APPLICATION = 'configuracoes.wsgi.application'
@@ -123,5 +133,21 @@ LOGGING = {
     'loggers': {
         'gerador_kits': {'level': 'INFO', 'handlers': ['console']},
         'gerador_kits.metrics': {'level': 'INFO', 'handlers': ['console']},
+    },
+}
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        "integracoes": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+        },
     },
 }

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerador EAN | R831</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f7f6; padding: 40px; }
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background: #0056b3; color: white; padding: 12px 20px; border: none; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; border-radius: 4px; }
+        button:hover { background: #004494; }
+        .erro { background: #fee2e2; color: #991b1b; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+        .erro small { display: block; margin-top: 6px; font-size: 12px; opacity: 0.8; }
+        .sucesso { background: #dcfce7; color: #166534; padding: 20px; border-radius: 4px; margin-top: 20px; text-align: center; }
+        .ean-destaque { font-size: 28px; font-weight: bold; font-family: monospace; letter-spacing: 3px; display: block; margin: 10px 0; }
+        .badge { background: #e0e7ff; color: #3730a3; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .info-row { font-size: 12px; color: #555; margin-top: 8px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>🏭 Gerador de EAN R831</h2>
+
+    {% if erro %}
+    <div class="erro">
+        <strong>⚠️ Bloqueado:</strong> {{ erro }}
+        <small>Corrija o cadastro no BaseLinker e tente novamente.</small>
+    </div>
+    {% endif %}
+
+    <form method="POST">
+        {% csrf_token %}
+        <div class="form-group">
+            <label>SKU no BaseLinker:</label>
+            <input type="text" name="sku" value="{{ request.POST.sku }}" required placeholder="Ex: R831-001">
+        </div>
+        <div class="form-group">
+            <label>Código GPC:</label>
+            <input type="number" name="gpc" value="{{ request.POST.gpc }}" required placeholder="Ex: 10000456">
+        </div>
+        <button type="submit">⚡ Gerar EAN</button>
+    </form>
+
+    {% if resultado %}
+    <div class="sucesso">
+        <small>{{ resultado.nome }}</small><br>
+        <span class="ean-destaque">{{ resultado.ean }}</span>
+
+        <div class="info-row">NCM: <strong>{{ resultado.ncm }}</strong></div>
+
+        {% if resultado.foto_enviada %}
+            <span class="badge">📸 Foto sincronizada na GS1</span><br><br>
+        {% endif %}
+
+        {% if resultado.salvo_bl %}
+            <strong>✅ Salvo automaticamente no BaseLinker!</strong>
+        {% else %}
+            <strong style="color: #991b1b;">⚠️ Falha ao salvar no BaseLinker. Salve manualmente o EAN: {{ resultado.ean }}</strong>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+</body>
+</html>

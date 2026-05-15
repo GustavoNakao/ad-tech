@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R831 — Acesso Negado</title>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root { --bg:#060a0f; --surface:#0c1219; --border:rgba(255,255,255,0.07); --danger:#ff4d6d; --muted:#4a5a6e; --text:#dde4ef; }
+        body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+        .card { max-width:400px; width:100%; background:var(--surface); border:1px solid rgba(255,77,109,0.2); border-radius:16px; padding:40px 32px; text-align:center; animation:fu .4s ease; }
+        .icon { font-size:40px; margin-bottom:20px; }
+        h1 { font-family:'Syne',sans-serif; font-size:20px; font-weight:800; color:var(--danger); margin-bottom:8px; }
+        p { font-size:12.5px; color:var(--muted); line-height:1.6; margin-bottom:6px; }
+        .cargo { display:inline-block; margin:12px 0; background:rgba(255,77,109,0.07); border:1px solid rgba(255,77,109,0.2); border-radius:8px; padding:6px 14px; font-size:12px; color:var(--danger); }
+        .btn { display:inline-flex; align-items:center; gap:8px; margin-top:24px; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:9px; color:var(--text); font-family:'DM Mono',monospace; font-size:12.5px; padding:10px 20px; text-decoration:none; transition:all .2s; }
+        .btn:hover { background:rgba(255,255,255,0.07); }
+        @keyframes fu { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="icon">🚫</div>
+    <h1>Acesso Negado</h1>
+    <p>Você não tem permissão para acessar esta página.</p>
+    {% if cargo %}
+    <div class="cargo">Seu cargo: {{ cargo }}</div>
+    {% endif %}
+    <p>Entre em contato com o gestor para solicitar acesso.</p>
+    <a href="/" class="btn">← Voltar ao início</a>
+</div>
+</body>
+</html>

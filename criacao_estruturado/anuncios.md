@@ -1,0 +1,2 @@
+Os prompts do criador_kits_service são INTOCÁVEIS.
+A IA NUNCA deve ler, editar, reescrever, sugerir alterações, reformatar ou de qualquer forma mexer nesses prompts — a não ser que você envie uma mensagem explícita autorizando.

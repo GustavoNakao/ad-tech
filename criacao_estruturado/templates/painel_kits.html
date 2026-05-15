@@ -3,186 +3,582 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>S-Produto | Gerador de Kits</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <title>R831 — Gerador de Kits</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
     <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         :root {
-            --bg-body: #0f172a;
-            --bg-card: #1e293b;
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --accent: #3b82f6;
-            --border: #334155;
+            --bg:       #080c12;
+            --surface:  #0e1520;
+            --surface2: #141d2b;
+            --border:   rgba(255,255,255,0.07);
+            --border2:  rgba(255,255,255,0.13);
+            --cyan:     #00c8ff;
+            --cyan-dim: rgba(0,200,255,0.10);
+            --text:     #e8edf5;
+            --muted:    #5a6a80;
+            --success:  #00e599;
+            --danger:   #ff4d6d;
+            --warn:     #ffc14d;
+            --purple:   #a78bfa;
+            --fh:       'Syne', sans-serif;
+            --fm:       'DM Mono', monospace;
         }
 
-        body {
-            background-color: var(--bg-body);
-            color: var(--text-primary);
-            font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
-            min-height: 100vh;
+        body { background:var(--bg); color:var(--text); font-family:var(--fm); font-size:13px; min-height:100vh; line-height:1.6; }
+
+        body::after {
+            content:''; position:fixed; top:-180px; left:50%; transform:translateX(-50%);
+            width:600px; height:360px;
+            background:radial-gradient(ellipse, rgba(0,200,255,0.05) 0%, transparent 70%);
+            pointer-events:none; z-index:0;
         }
 
-        .navbar {
-            background: rgba(30, 41, 59, 0.8);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--border);
+        .wrap { position:relative; z-index:1; max-width:1280px; margin:0 auto; padding:0 24px 64px; }
+
+        /* NAV */
+        nav { position:sticky; top:0; z-index:100; background:rgba(8,12,18,0.92); backdrop-filter:blur(16px); border-bottom:1px solid var(--border); padding:0 24px; }
+        .nav-in { max-width:1280px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; height:58px; }
+        .brand { display:flex; align-items:center; gap:10px; font-family:var(--fh); font-weight:800; font-size:15px; color:var(--text); text-decoration:none; }
+        .logo { width:28px; height:28px; border-radius:6px; background:linear-gradient(135deg,#00c8ff,#006bcc); display:flex; align-items:center; justify-content:center; }
+        .logo i { font-size:12px; color:#050810; }
+        .brand-sep { color:var(--muted); font-weight:400; font-size:12px; }
+        .nav-r { display:flex; align-items:center; gap:12px; }
+        .pill { display:flex; align-items:center; gap:6px; background:rgba(0,229,153,0.07); border:1px solid rgba(0,229,153,0.18); color:var(--success); padding:4px 12px; border-radius:20px; font-size:11px; }
+        .dot { width:6px; height:6px; border-radius:50%; background:var(--success); animation:pd 2s ease infinite; }
+        @keyframes pd { 0%,100%{opacity:1} 50%{opacity:.4} }
+        .nav-user { font-size:11px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+        .nav-user a { color:var(--muted); text-decoration:none; border:1px solid var(--border2); padding:3px 10px; border-radius:6px; transition:all .2s; font-size:11px; }
+        .nav-user a:hover { color:var(--text); background:rgba(255,255,255,.04); }
+
+        /* PAGE HEADER */
+        .ph { padding:32px 0 22px; }
+        .ph h1 { font-family:var(--fh); font-size:24px; font-weight:800; letter-spacing:-.4px; margin-bottom:4px; }
+        .ph h1 span { color:var(--cyan); }
+        .ph p { color:var(--muted); font-size:12px; }
+
+        /* METRICS */
+        .mg { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+        .mc { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; animation:fu .4s ease both; position:relative; overflow:hidden; }
+        .mc:nth-child(2){animation-delay:.06s} .mc:nth-child(3){animation-delay:.12s}
+        .mc::after { content:''; position:absolute; top:0; left:0; right:0; height:1.5px; background:linear-gradient(90deg,transparent,var(--cyan),transparent); opacity:0; transition:opacity .3s; }
+        .mc:hover::after{opacity:1}
+        .mi { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:13px; margin-bottom:10px; }
+        .ic{background:rgba(0,200,255,.1);color:var(--cyan)} .ig{background:rgba(0,229,153,.1);color:var(--success)} .ia{background:rgba(255,193,77,.1);color:var(--warn)}
+        .ml-m { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:3px; }
+        .mv { font-family:var(--fh); font-size:28px; font-weight:800; line-height:1; }
+        .ms { font-size:11px; color:var(--muted); margin-top:3px; }
+
+        /* LAYOUT */
+        .layout { display:grid; grid-template-columns:360px 1fr; gap:16px; align-items:start; }
+        .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; animation:fu .4s ease both; }
+        .ch { display:flex; align-items:center; justify-content:space-between; padding:18px 20px 0; }
+        .ch h2 { font-family:var(--fh); font-size:13px; font-weight:700; display:flex; align-items:center; gap:7px; }
+        .ch h2 i { color:var(--cyan); font-size:11px; }
+        .chip { font-size:10px; padding:2px 9px; border-radius:20px; background:var(--cyan-dim); color:var(--cyan); border:1px solid rgba(0,200,255,.18); }
+        .cb { padding:16px 20px 20px; }
+
+        /* FORM */
+        .fg { margin-bottom:14px; }
+        .fl { display:block; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:6px; font-weight:500; }
+        .fi { width:100%; background:#060a10; border:1px solid var(--border2); border-radius:9px; color:var(--text); font-family:var(--fm); font-size:14px; padding:11px 13px; outline:none; transition:border-color .2s,box-shadow .2s; }
+        .fi::placeholder{color:var(--muted)}
+        .fi:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,200,255,.08)}
+
+        /* Toggle kit misto */
+        .toggle-misto { display:flex; align-items:center; gap:9px; margin-bottom:14px; cursor:pointer; user-select:none; }
+        .toggle-misto input[type=checkbox] { width:16px; height:16px; accent-color:var(--cyan); cursor:pointer; }
+        .toggle-misto span { font-size:12px; color:var(--muted); }
+        .toggle-misto span b { color:var(--cyan); }
+        #campo-sku-secundario { display:none; }
+        #campo-sku-secundario.visivel { display:block; animation:fu .3s ease; }
+
+        .btn-criar { width:100%; padding:12px; background:linear-gradient(135deg,#00c8ff,#007acc); border:none; border-radius:9px; color:#050810; font-family:var(--fh); font-size:13px; font-weight:700; cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:8px; }
+        .btn-criar:hover{transform:translateY(-2px);box-shadow:0 8px 22px -4px rgba(0,200,255,.3)}
+        .btn-criar.loading{pointer-events:none;opacity:.5}
+
+        .hint { margin-top:12px; background:rgba(0,200,255,.04); border:1px solid rgba(0,200,255,.1); border-radius:8px; padding:10px 13px; font-size:11px; color:var(--muted); display:flex; gap:8px; }
+        .hint i{color:var(--cyan);margin-top:1px;flex-shrink:0}
+
+        /* AI rows */
+        .ai-sec { margin-top:16px; border-top:1px solid var(--border); padding-top:14px; }
+        .ai-lbl { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:9px; }
+        .ai-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); font-size:12px; }
+        .ai-row:last-child{border-bottom:none}
+        .ai-row i{width:15px;text-align:center;font-size:10px}
+        .at{margin-left:auto;font-size:9px;padding:2px 7px;border-radius:10px;font-weight:500}
+        .tg{background:rgba(0,200,255,.09);color:var(--cyan);border:1px solid rgba(0,200,255,.15)}
+        .ta{background:rgba(0,229,153,.09);color:var(--success);border:1px solid rgba(0,229,153,.15)}
+        .tw{background:rgba(255,193,77,.09);color:var(--warn);border:1px solid rgba(255,193,77,.15)}
+
+        /* ALERTS */
+        .alerts{margin-bottom:16px}
+        .alert{display:flex;align-items:flex-start;gap:10px;padding:12px 15px;border-radius:10px;border-left:3px solid;margin-bottom:8px;background:var(--surface2);position:relative;animation:si .3s ease}
+        .alert i{margin-top:1px;flex-shrink:0;font-size:12px}
+        .as{border-color:var(--success)}.as i{color:var(--success)}
+        .ae{border-color:var(--danger)}.ae i{color:var(--danger)}
+        .ax{position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;padding:4px}
+
+        /* ERRO DETALHE */
+        .erro-detail { margin-top:16px; background:rgba(255,77,109,0.05); border:1px solid rgba(255,77,109,0.3); border-radius:10px; padding:14px 16px; }
+        .erro-detail-titulo { font-family:var(--fh); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--danger); margin-bottom:7px; display:flex; align-items:center; gap:6px; }
+        .erro-detail-msg { font-size:11.5px; color:#e8a0ae; background:rgba(0,0,0,.2); border-radius:6px; padding:9px 12px; word-break:break-word; }
+
+        /* ══ STATUS BANNER ══ */
+        .analise-wrap { margin-top:18px; border-top:1px solid var(--border); padding-top:18px; animation:fu .5s ease; }
+        .analise-titulo { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+        .analise-titulo i{color:var(--cyan)}
+
+        .status-banner { border-radius:10px; padding:13px 15px; margin-bottom:12px; display:flex; align-items:flex-start; gap:11px; border:1px solid; }
+        .status-banner.verde   { background:rgba(0,229,153,.06); border-color:rgba(0,229,153,.3); }
+        .status-banner.amarelo { background:rgba(255,193,77,.06); border-color:rgba(255,193,77,.3); }
+        .status-banner.vermelho{ background:rgba(255,77,109,.06); border-color:rgba(255,77,109,.3); }
+        .sb-emoji{font-size:22px;line-height:1;flex-shrink:0;margin-top:1px}
+        .sb-body{flex:1}
+        .sb-label{font-family:var(--fh);font-weight:700;font-size:11px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:3px}
+        .verde .sb-label{color:var(--success)} .amarelo .sb-label{color:var(--warn)} .vermelho .sb-label{color:var(--danger)}
+        .sb-msg{font-size:11px;color:var(--text);line-height:1.5;opacity:.85}
+
+        /* ══ GRADE DE 8 ANÚNCIOS ══ */
+        .grade-titulo { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:14px 0 10px; display:flex; align-items:center; gap:6px; }
+        .grade-titulo i{color:var(--cyan)}
+
+        .grade-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-bottom:14px; }
+        .grade-card {
+            background:var(--surface2); border:1px solid var(--border); border-radius:9px;
+            padding:10px; text-align:center; position:relative; transition:border-color .2s;
         }
 
-        .navbar-brand {
-            font-weight: 700;
-            color: white !important;
+        .grade-card.bloqueado   { border-color:rgba(255,77,109,.3); opacity:.6; }
+        .grade-card.premium     { border-color:rgba(167,139,250,.2); background:rgba(167,139,250,.04); }
+
+        .badge-tipo {
+            position:absolute; top:-8px; left:50%; transform:translateX(-50%);
+            font-family:var(--fh); font-size:8px; font-weight:700;
+            padding:2px 7px; border-radius:12px; white-space:nowrap;
         }
 
-        .card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
+        .badge-tipo.tar-red { background:var(--purple); color:#fff; }
+        .badge-tipo.blk     { background:var(--danger); color:#fff; }
+
+        .gc-label  { font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+        .gc-qtd    { font-family:var(--fh); font-size:10px; color:var(--muted); margin-bottom:3px; }
+        .gc-guerra { font-family:var(--fh); font-size:15px; font-weight:800; color:var(--text); }
+        .gc-vitrine{ font-size:10px; color:var(--muted); margin-top:2px; }
+        .gc-vitrine span { color:var(--warn); }
+        .gc-frete  { font-size:9px; color:var(--muted); margin-top:3px; }
+        .gc-err    { font-size:9px; color:var(--danger); margin-top:3px; }
+
+        /* Tabs da grade */
+        .grade-tabs { display:flex; gap:6px; margin-bottom:10px; }
+        .grade-tab {
+            flex:1; padding:6px; border-radius:7px; border:1px solid var(--border);
+            background:transparent; color:var(--muted); font-family:var(--fm); font-size:10px;
+            cursor:pointer; transition:all .2s; text-align:center;
         }
+        .grade-tab.ativo { border-color:var(--cyan); color:var(--cyan); background:var(--cyan-dim); }
+        .grade-section { display:none; }
+        .grade-section.ativo { display:block; }
 
-        .card-header {
-            background: transparent;
-            border-bottom: 1px solid var(--border);
-            padding: 1.5rem;
-            font-weight: 600;
-            color: var(--accent);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        /* Preços cascade */
+        .preco-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:11px; }
+        .preco-card { background:var(--surface2); border:1px solid var(--border); border-radius:9px; padding:11px; text-align:center; position:relative; }
 
-        .card-body { padding: 2rem; }
 
-        .form-control {
-            background-color: #0f172a;
-            border: 1px solid var(--border);
-            color: white;
-            padding: 0.75rem 1rem;
-            border-radius: 10px;
-        }
+        .pt{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+        .pv{font-family:var(--fh);font-size:17px;font-weight:800;color:var(--text)}
+        .pu{font-size:9px;color:var(--muted);margin-top:2px}
+        .pu span{color:var(--success)}
 
-        .form-control:focus {
-            background-color: #0f172a;
-            border-color: var(--accent);
-            color: white;
-            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
-        }
+        .motivo-box { background:rgba(0,200,255,.04); border:1px solid rgba(0,200,255,.12); border-radius:8px; padding:9px 12px; font-size:11px; color:var(--muted); line-height:1.55; margin-bottom:9px; }
+        .motivo-box strong { display:block; font-family:var(--fh); font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:var(--cyan); margin-bottom:3px; }
+        .upsell-box { background:rgba(255,193,77,.05); border:1px solid rgba(255,193,77,.2); border-radius:8px; padding:9px 12px; font-size:11px; color:var(--warn); }
 
-        .form-control::placeholder { color: #475569; }
+        /* BLOQUEIO */
+        .bloqueio-box { background:rgba(255,77,109,.06); border:1px solid rgba(255,77,109,.3); border-radius:10px; padding:14px 16px; margin-top:16px; }
+        .bloqueio-titulo { font-family:var(--fh); font-size:11px; font-weight:700; color:var(--danger); margin-bottom:6px; }
+        .bloqueio-msg { font-size:12px; color:#e8a0ae; }
 
-        .form-label {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            font-weight: 500;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
-        }
+        /* HISTORY */
+        .empty{text-align:center;padding:40px 20px;color:var(--muted)}
+        .empty i{font-size:26px;opacity:.2;display:block;margin-bottom:9px}
+        table{width:100%;border-collapse:collapse}
+        thead th{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:500;padding:0 13px 10px;text-align:left}
+        thead th:first-child{padding-left:20px} thead th:last-child{padding-right:20px;text-align:right}
+        tbody tr{border-top:1px solid var(--border);transition:background .15s}
+        tbody tr:hover{background:rgba(255,255,255,.015)}
+        tbody td{padding:11px 13px;font-size:12px}
+        tbody td:first-child{padding-left:20px} tbody td:last-child{padding-right:20px;text-align:right}
+        .sc{display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px 8px;font-size:11px}
+        .sc.kit{border-color:rgba(0,200,255,.22);color:var(--cyan);background:var(--cyan-dim)}
+        .arr{color:var(--muted);font-size:8px}
+        .ts{font-size:11px;color:var(--muted)}
 
-        .btn-criar {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            border: none;
-            color: white;
-            font-weight: 600;
-            padding: 0.85rem 1.5rem;
-            border-radius: 10px;
-            transition: all 0.2s;
-            width: 100%;
-        }
+        @keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes si{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+        .spinner{width:14px;height:14px;border:2px solid rgba(0,0,0,.2);border-top-color:#050810;border-radius:50%;animation:sp .6s linear infinite}
+        @keyframes sp{to{transform:rotate(360deg)}}
 
-        .btn-criar:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px -8px rgba(59,130,246,0.6);
-            color: white;
-        }
-
-        .btn-criar:active { transform: translateY(0); }
-
-        .info-box {
-            background: rgba(59,130,246,0.08);
-            border: 1px solid rgba(59,130,246,0.2);
-            border-radius: 10px;
-            padding: 1rem 1.25rem;
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
-
-        .info-box i { color: var(--accent); }
-
-        .text-dim { color: var(--text-secondary); }
+        @media(max-width:960px){.layout{grid-template-columns:1fr} .grade-grid{grid-template-columns:repeat(2,1fr)}}
+        @media(max-width:600px){.mg{grid-template-columns:1fr 1fr} .preco-grid{grid-template-columns:1fr} .grade-grid{grid-template-columns:repeat(2,1fr)}}
     </style>
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg sticky-top mb-5">
-        <div class="container">
-            <a class="navbar-brand" href="#">
-                <i class="fa-solid fa-layer-group me-2 text-primary"></i>
-                S-Produto <span class="text-dim fw-normal">| Gerador de Kits</span>
-            </a>
-            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2 rounded-pill">
-                <i class="fa-solid fa-circle-check me-1"></i> Sistema Ativo
-            </span>
-        </div>
-    </nav>
-
-    <div class="container">
-
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show mb-4" role="alert" style="border-radius: 12px; border: none; border-left: 4px solid {% if message.tags == 'error' %}#ef4444{% elif message.tags == 'success' %}#10b981{% else %}#3b82f6{% endif %}; background: var(--bg-card);">
-                    <i class="fa-solid {% if message.tags == 'error' %}fa-circle-xmark text-danger{% elif message.tags == 'success' %}fa-circle-check text-success{% else %}fa-circle-info text-primary{% endif %} me-2"></i>
-                    {{ message }}
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-
-        <div class="row justify-content-center">
-            <div class="col-lg-6 col-md-8">
-
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fa-solid fa-pen-to-square"></i>
-                        Criação de Kit
-                    </div>
-                    <div class="card-body">
-
-                        <form method="POST">
-                            {% csrf_token %}
-                            <input type="hidden" name="acao" value="criar_manual">
-
-                            <div class="mb-4">
-                                <label class="form-label">SKU do Produto Original</label>
-                                <input
-                                    type="text"
-                                    name="sku_manual"
-                                    class="form-control form-control-lg"
-                                    placeholder="Ex: 30565"
-                                    autofocus
-                                    autocomplete="off"
-                                >
-                            </div>
-
-                            <button type="submit" class="btn btn-criar">
-                                <i class="fa-solid fa-plus me-2"></i>
-                                Criar Kit
-                            </button>
-                        </form>
-
-                        <div class="info-box mt-4">
-                            <i class="fa-solid fa-circle-info me-2"></i>
-                            Informe o SKU do produto original. O sistema buscará os dados no Baselinker e criará o kit automaticamente com o próximo número da sequência.
-                        </div>
-
-                    </div>
-                </div>
-
+<nav>
+    <div class="nav-in">
+        <a class="brand" href="#">
+            <div class="logo"><i class="fa-solid fa-bag-shopping"></i></div>
+            R831 <span class="brand-sep">/ Gerador de Kits</span>
+        </a>
+        <div class="nav-r">
+            <div class="pill"><div class="dot"></div> Sistema Ativo</div>
+            {% if request.user.is_authenticated %}
+            <div class="nav-user">
+                <span>{{ request.user.username }}</span>
+                <a href="/logout/">Sair</a>
             </div>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+
+<div class="wrap">
+    <div class="ph">
+        <h1>Gerador de <span>Kits</span></h1>
+        <p>Grade de 8 anúncios com Preço de Promoção e Vitrine calculados automaticamente</p>
+    </div>
+
+    {% if messages %}
+    <div class="alerts">
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}ae{% else %}as{% endif %}">
+            <i class="fa-solid {% if message.tags == 'error' %}fa-circle-xmark{% else %}fa-circle-check{% endif %}"></i>
+            <span>{{ message }}</span>
+            <button class="ax" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- MÉTRICAS -->
+    <div class="mg">
+        <div class="mc">
+            <div class="mi ic"><i class="fa-solid fa-boxes-stacked"></i></div>
+            <div class="ml-m">Total de Kits</div>
+            <div class="mv">{{ total_kits }}</div>
+            <div class="ms">criados no sistema</div>
+        </div>
+        <div class="mc">
+            <div class="mi ig"><i class="fa-solid fa-calendar-day"></i></div>
+            <div class="ml-m">Hoje</div>
+            <div class="mv">{{ kits_hoje }}</div>
+            <div class="ms">kits criados hoje</div>
+        </div>
+        <div class="mc">
+            <div class="mi ia"><i class="fa-solid fa-chart-line"></i></div>
+            <div class="ml-m">7 Dias</div>
+            <div class="mv">{{ kits_semana }}</div>
+            <div class="ms">nesta semana</div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <div class="layout">
+
+        <!-- FORMULÁRIO -->
+        <div class="card" style="animation-delay:.18s">
+            <div class="ch">
+                <h2><i class="fa-solid fa-wand-magic-sparkles"></i> Criar Kit</h2>
+                <span class="chip">Manual</span>
+            </div>
+            <div class="cb">
+                <form method="POST" id="form-criar">
+                    {% csrf_token %}
+                    <input type="hidden" name="acao" value="analisar">
+
+                    <div class="fg">
+                        <label class="fl">SKU do Produto Principal</label>
+                        <input type="text" name="sku_manual" id="sku-inp" class="fi"
+                               placeholder="Ex: 30565" autofocus autocomplete="off">
+                    </div>
+
+                    <div class="fg">
+                        <label class="fl" style="display:flex;align-items:center;gap:5px;">
+                            <i class="fa-brands fa-mercadopago" style="color:#00c8ff;"></i>
+                            URL do Produto no ML
+                            <span style="font-size:9px;color:#3a4a5c;margin-left:4px;">(opcional — para categoria correta)</span>
+                        </label>
+                        <input type="url" name="url_produto_ml" id="url-ml" class="fi"
+                               placeholder="https://www.mercadolivre.com.br/..." autocomplete="off">
+                        <span style="font-size:9px;color:#3a4a5c;margin-top:4px;display:block;">
+                            <i class="fa-solid fa-circle-info" style="color:#00c8ff;"></i>
+                            Se vazio, o kit vai para a categoria Estruturado (ID 979589).
+                        </span>
+                    </div>
+
+                    <!-- Toggle Kit Misto -->
+                    <label class="toggle-misto">
+                        <input type="checkbox" id="chk-misto">
+                        <span>Kit Misto — <b>2 SKUs diferentes</b></span>
+                    </label>
+
+                    <div id="campo-sku-secundario">
+                        <div class="fg">
+                            <label class="fl">SKU Secundário</label>
+                            <input type="text" name="sku_secundario" id="sku-sec" class="fi"
+                                   placeholder="Ex: 30566" autocomplete="off">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-criar" id="btn-criar">
+                        <i class="fa-solid fa-magnifying-glass-chart"></i> Analisar Produto
+                    </button>
+                </form>
+
+                <div class="hint">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>O sistema gera a grade de 8 anúncios (1/2/3/4un × Clássico/Premium) com Preço de Promoção e Vitrine automaticamente.</span>
+                </div>
+
+                <div class="ai-sec">
+                    <div class="ai-lbl">Gerado automaticamente</div>
+                    <div class="ai-row"><i class="fa-solid fa-heading" style="color:var(--cyan)"></i>Título SEO (máx. 60 chars)<span class="at tg">Gemini</span></div>
+                    <div class="ai-row"><i class="fa-solid fa-align-left" style="color:var(--cyan)"></i>Descrição estruturada<span class="at tg">Gemini</span></div>
+                    <div class="ai-row"><i class="fa-solid fa-tag" style="color:var(--success)"></i>Grade de 8 preços (Promoção + Vitrine)<span class="at ta">Engine v2</span></div>
+                    <div class="ai-row"><i class="fa-solid fa-weight-hanging" style="color:var(--success)"></i>Peso cubado vs real (MAX)<span class="at ta">Engine v2</span></div>
+                    <div class="ai-row"><i class="fa-solid fa-truck" style="color:var(--warn)"></i>Frete com desconto MercadoLíder 50%<span class="at tw">Engine v2</span></div>
+                </div>
+
+                {# ── ERRO DETALHE ── #}
+                {% if erro_detalhe %}
+                <div class="erro-detail">
+                    <div class="erro-detail-titulo"><i class="fa-solid fa-triangle-exclamation"></i> Detalhes do Erro</div>
+                    <div class="erro-detail-msg">{{ erro_detalhe }}</div>
+                </div>
+                {% endif %}
+
+                {# ── ANÁLISE + GRADE ── #}
+                {% if analise %}
+                <div class="analise-wrap">
+
+                    {% if analise.bloqueado %}
+                    <div class="bloqueio-box">
+                        <div class="bloqueio-titulo">🔴 PRODUTO BLOQUEADO</div>
+                        <div class="bloqueio-msg">{{ analise.motivo_bloqueio }}</div>
+                    </div>
+
+                    {% else %}
+
+                    <div class="analise-titulo"><i class="fa-solid fa-chart-bar"></i> Análise de Precificação {% if analise.e_misto %}<span style="color:var(--purple);margin-left:6px;">🔀 Kit Misto</span>{% endif %}</div>
+
+                    <!-- Status banner -->
+                    <div class="status-banner {{ analise.status }}">
+                        <div class="sb-emoji">{{ analise.status_emoji }}</div>
+                        <div class="sb-body">
+                            <div class="sb-label">{{ analise.status_label }}</div>
+                            <div class="sb-msg">{{ analise.status_mensagem }}</div>
+                        </div>
+                    </div>
+
+                    <!-- GRADE DE 8 ANÚNCIOS -->
+                    {% if analise.anuncios %}
+                    <div class="grade-titulo"><i class="fa-solid fa-table-cells"></i> Grade de 8 Anúncios</div>
+
+                    <div class="grade-tabs">
+                        <button class="grade-tab ativo" onclick="mudarTab(this, 'promocao')">💰 Preço de Promoção</button>
+                        <button class="grade-tab" onclick="mudarTab(this, 'vitrine')">🏷️ Preço de Vitrine</button>
+                    </div>
+
+                    <!-- Tab Promoção -->
+                    <div class="grade-section ativo" id="tab-promocao">
+                        <div class="grade-grid">
+                        {% for a in analise.anuncios %}
+                        <div class="grade-card {% if a.bloqueado %}bloqueado{% elif a.modalidade == 'premium' %}premium{% endif %}">
+                            {% if a.tarifa_reduzida %}<div class="badge-tipo tar-red">🎯 Tar. Red.</div>{% endif %}
+                            {% if a.bloqueado %}<div class="badge-tipo blk">🔴 Bloq.</div>{% endif %}
+                            <div class="gc-label">{{ a.modalidade|upper }}</div>
+                            <div class="gc-qtd">{{ a.quantidade }}un</div>
+                            <div class="gc-guerra">R$ {{ a.preco_promocao|floatformat:2 }}</div>
+                            <div class="gc-frete">Frete: R${{ a.custo_logistico|floatformat:2 }}</div>
+                            {% if a.erros %}<div class="gc-err">⚠️ {{ a.erros|join:", " }}</div>{% endif %}
+                        </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Tab Vitrine -->
+                    <div class="grade-section" id="tab-vitrine">
+                        <div class="grade-grid">
+                        {% for a in analise.anuncios %}
+                        <div class="grade-card {% if a.bloqueado %}bloqueado{% elif a.modalidade == 'premium' %}premium{% endif %}">
+                            {% if a.tarifa_reduzida %}<div class="badge-tipo tar-red">🎯 Tar. Red.</div>{% endif %}
+                            {% if a.bloqueado %}<div class="badge-tipo blk">🔴 Bloq.</div>{% endif %}
+                            <div class="gc-label">{{ a.modalidade|upper }}</div>
+                            <div class="gc-qtd">{{ a.quantidade }}un</div>
+                            <div class="gc-guerra">R$ {{ a.preco_vitrine|floatformat:2 }}</div>
+                            <div class="gc-vitrine">Promoção: <span>R$ {{ a.preco_promocao|floatformat:2 }}</span></div>
+                        </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if analise.category_id_ml %}
+                    <div style="margin-bottom:12px;padding:8px 12px;background:rgba(0,200,255,0.06);border:1px solid rgba(0,200,255,0.15);border-radius:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <i class="fa-brands fa-mercadopago" style="color:#00c8ff;font-size:13px;"></i>
+                        <span style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Categoria ML</span>
+                        <span style="font-family:var(--fm);font-size:12px;color:#e6f0ff;font-weight:600;">{{ analise.category_id_ml }}</span>
+                        <span style="font-size:9px;color:#3a4a5c;margin-left:auto;">{{ analise.categoria_origem }}</span>
+                    </div>
+                    {% endif %}
+                    {% if analise.alerta_upsell %}
+                    <div class="upsell-box">{{ analise.alerta_upsell }}</div>
+                    {% endif %}
+
+                    <!-- BOTÃO DE CONFIRMAÇÃO (CRIAR KIT) -->
+                    <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:20px;">
+                        <form method="POST">
+                            {% csrf_token %}
+                            <input type="hidden" name="acao" value="confirmar_criacao">
+                            <input type="hidden" name="sku_manual" value="{{ analise.sku_manual }}">
+                            <input type="hidden" name="sku_secundario" value="{{ analise.sku_secundario }}">
+                            <input type="hidden" name="category_id_ml" value="{{ analise.category_id_ml }}">
+                            
+                            {% if analise.status == 'vermelho' %}
+                                <div style="background:rgba(255,193,77,.1); color:var(--warn); padding:12px; border-radius:9px; font-size:11px; text-align:center; border:1px solid rgba(255,193,77,.2); margin-bottom:12px;">
+                                    <i class="fa-solid fa-triangle-exclamation"></i> <b>ATENÇÃO:</b> Margem Insuficiente. A criação está liberada para teste, mas verifique os preços.
+                                </div>
+                            {% endif %}
+                            
+                            <button type="submit" class="btn-criar" style="background:linear-gradient(135deg,#00e599,#009e6a);" id="btn-confirmar">
+                                <i class="fa-solid fa-layer-group"></i> Criar Grade Completa (8 Anúncios)
+                            </button>
+                            <p style="font-size:10px; color:var(--muted); text-align:center; margin-top:8px;">
+                                <i class="fa-solid fa-robot"></i> A IA gerará 8 títulos e descrições únicas. Este processo pode levar até 30 segundos.
+                            </p>
+                        </form>
+                    </div>
+
+                    {% endif %}{# fim bloqueado #}
+                </div>
+                {% endif %}{# fim analise #}
+
+            </div>
+        </div>
+
+        <!-- HISTÓRICO -->
+        <div class="card" style="animation-delay:.24s">
+            <div class="ch">
+                <h2><i class="fa-solid fa-clock-rotate-left"></i> Últimos Kits Criados</h2>
+                {% if ultimos_kits %}<span class="chip">{{ ultimos_kits|length }} recentes</span>{% endif %}
+            </div>
+            <div class="cb" style="padding-left:0;padding-right:0;padding-top:12px;">
+                {% if ultimos_kits %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Produto Original</th>
+                            <th>Kit Criado</th>
+                            <th>Ver no BaseLinker</th>
+                            <th>Criado em</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for kit in ultimos_kits %}
+                        <tr>
+                            <td><span class="sc"><i class="fa-solid fa-barcode"></i>{{ kit.sku_origem }}</span></td>
+                            <td>
+                                <span style="display:flex;align-items:center;gap:6px;">
+                                    <i class="fa-solid fa-arrow-right arr"></i>
+                                    <span class="sc kit"><i class="fa-solid fa-layer-group"></i>{{ kit.sku_kit }}</span>
+                                </span>
+                            </td>
+                            <td>
+                                <a href="https://panel-u.baselinker.com/inventory_bundles#product:{{ kit.id_kit }}#tab:general"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   title="Abrir produto {{ kit.id_kit }} no BaseLinker"
+                                   style="display:inline-flex;align-items:center;gap:5px;color:#1a73e8;font-size:12px;font-weight:600;text-decoration:none;">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                    ID {{ kit.id_kit }}
+                                </a>
+                            </td>
+                            <td><span class="ts">{{ kit.criado_em|date:"d/m/Y H:i" }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty">
+                    <i class="fa-solid fa-box-open"></i>
+                    <p>Nenhum kit criado ainda.</p>
+                    <small style="font-size:10px;color:#3a4a5c;">Use o formulário ao lado para criar o primeiro.</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// Toggle Kit Misto
+document.getElementById('chk-misto').addEventListener('change', function() {
+    const campo = document.getElementById('campo-sku-secundario');
+    const sku2  = document.getElementById('sku-sec');
+    if (this.checked) {
+        campo.classList.add('visivel');
+        sku2.required = true;
+    } else {
+        campo.classList.remove('visivel');
+        sku2.required = false;
+        sku2.value = '';
+    }
+});
+
+// Tabs da grade
+function mudarTab(btn, id) {
+    document.querySelectorAll('.grade-tab').forEach(t => t.classList.remove('ativo'));
+    document.querySelectorAll('.grade-section').forEach(s => s.classList.remove('ativo'));
+    btn.classList.add('ativo');
+    document.getElementById('tab-' + id).classList.add('ativo');
+}
+
+// Loading no botão
+document.getElementById('form-criar').addEventListener('submit', function(e) {
+    const inp = document.getElementById('sku-inp');
+    if (!inp.value.trim()) { e.preventDefault(); return; }
+    const btn = document.getElementById('btn-criar');
+    if(btn) {
+        btn.classList.add('loading');
+        btn.innerHTML = '<div class="spinner"></div> Analisando...';
+    }
+});
+
+// Loading no botão de confirmação
+document.querySelectorAll('form').forEach(f => {
+    if(f.querySelector('input[name="acao"][value="confirmar_criacao"]')) {
+        f.addEventListener('submit', function() {
+            const btn = document.getElementById('btn-confirmar');
+            if(btn) {
+                btn.classList.add('loading');
+                btn.innerHTML = '<div class="spinner"></div> Gerando Grade (IA)...';
+            }
+        });
+    }
+});
+
+// Auto-dismiss alerts
+document.querySelectorAll('.alert').forEach(function(a) {
+    setTimeout(function() {
+        a.style.transition = 'opacity .4s';
+        a.style.opacity = '0';
+        setTimeout(function(){ a.remove(); }, 400);
+    }, 7000);
+});
+</script>
 </body>
 </html>

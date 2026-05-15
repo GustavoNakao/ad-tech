@@ -1,3 +1,3 @@
-from .client import GeminiClient
- 
-__all__ = ["GeminiClient"]
+from .client import GeminiClient, GeminiAPIError, GeminiRateLimitError
+
+__all__ = ["GeminiClient", "GeminiAPIError", "GeminiRateLimitError"]
