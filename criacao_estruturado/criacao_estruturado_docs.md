@@ -251,9 +251,11 @@ Retorna `{"53516": preco}` — tabela de preço padrão no BaseLinker.
 6. Adiciona campo obrigatório `extra_field_39310 = "un"`
 
 #### `_buscar_atributos_obrigatorios_ml(category_id_ml, features, dados) -> List[str]`
-Consulta a API do Mercado Livre para obter atributos obrigatórios da categoria. Para cada atributo não preenchido:
-- Se resolúvel por dados físicos → chama `_resolver_campo_fisico()` e preenche diretamente
-- Caso contrário → adiciona à lista para a IA preencher, com `(Valores permitidos: ...)` se aplicável
+Consulta a API do Mercado Livre para obter atributos obrigatórios da categoria.
+- **Filtro de Exclusão:** Remove automaticamente campos de identificação redundantes: `Motivo de GTIN vazio`, `reason_for_no_gtin`, `Motivo de GTIN isento`, `EAN`, `GTIN`, `Código de barras`.
+- Para cada atributo não preenchido e não filtrado:
+  - Se resolúvel por dados físicos → chama `_resolver_campo_fisico()` e preenche diretamente
+  - Caso contrário → adiciona à lista para a IA preencher, com `(Valores permitidos: ...)` se aplicável
 
 **Não executa** se `category_id_ml` for `None` ou `"979589"`.
 
@@ -283,8 +285,8 @@ Resolve campos de ficha técnica a partir dos dados físicos do produto sem prec
 
 ### Métodos de EAN/GS1
 
-#### `_obter_ean_kit(sku_origem, quantidade, dados_completos, sku_kit_final, titulo_final) -> str`
-**Regra:** kits com `quantidade <= 1` não geram novo EAN (retorna `""`).
+#### `_obter_ean_kit(sku_origem, quantidade, dados_completos, sku_kit_final, titulo_final, forcar_unitario=False) -> str`
+**Regra:** kits com `quantidade <= 1` não geram novo EAN (retorna `""`), **exceto** se `forcar_unitario` for `True`.
 
 Para `quantidade > 1`:
 1. Verifica se já existe EAN em `GtinKit` para o par `(sku_origem, quantidade)`
@@ -381,6 +383,7 @@ executar_criacao_grade(
     sku_origem,            # SKU do produto base
     sku_secundario=None,   # SKU do 2º produto (Kit Misto)
     category_id_ml=None,   # Category ID do Mercado Livre
+    gerar_ean_unitario=False, # Se True, gera novo GTIN para Qtd 1
 ) -> Dict
 ```
 
@@ -410,7 +413,8 @@ executar_criacao_grade(
     g. Montar payload completo
     h. _enviar_para_baselinker() → obter id_kit
     i. _salvar_historico()
-    j. Se quantidade > 1: aguardar 2s e gerar EAN via _obter_ean_kit()
+    j. Se quantidade > 1 ou (quantidade == 1 e gerar_ean_unitario):
+       Aguardar 2s e gerar EAN via _obter_ean_kit()
     k. Se EAN gerado: atualizar produto no BaseLinker com EAN e ficha técnica
     l. Em erro: _reciclar_numero() e continuar
 
@@ -437,15 +441,16 @@ Cria um **único kit** (não uma grade). Fluxo similar ao `executar_criacao_grad
 Painel web protegido por `@cadastro_required`.
 
 ### Ação `analisar`
-1. Recebe SKU manual (+ SKU secundário e URL do ML opcionais)
+1. Recebe SKU manual (+ SKU secundário, URL do ML e `gerar_ean_unitario` opcionais)
 2. Busca PID no BaseLinker
 3. Resolve `category_id_ml` via URL do produto (ou usa padrão)
 4. Chama `_analisar_com_grade()` → retorna grade de preços sem criar nada
 5. Exibe status: 🟢 Verde / 🟡 Amarelo / 🔴 Vermelho
+6. Armazena `gerar_ean_unitario` para a próxima etapa.
 
 ### Ação `confirmar_criacao`
-1. Recebe SKU + category_id_ml do formulário
-2. Chama `servico.executar_criacao_grade()`
+1. Recebe SKU + category_id_ml + `gerar_ean_unitario` do formulário
+2. Chama `servico.executar_criacao_grade(..., gerar_ean_unitario=...)`
 3. Exibe mensagem de sucesso com SKUs criados
 
 ### Função `_analisar_com_grade()`
@@ -493,7 +498,7 @@ Banco PostgreSQL → get_next_kit_sku()
 | Kit 4 Premium | `4_premium` | 4 | premium |
 
 **Regras de EAN por variação:**
-- Quantidade 1 → usa EAN do produto base
+- Quantidade 1 → usa EAN do produto base (**ou gera novo se `gerar_ean_unitario` for True**)
 - Quantidade > 1 → gera novo EAN na GS1, compartilhado entre Clássico e Premium do mesmo nível
 
 **Peso por variação:** `peso_base × quantidade` (+ peso_secundario × quantidade se Kit Misto)

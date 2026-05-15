@@ -325,6 +325,11 @@
                         <span>Kit Misto — <b>2 SKUs diferentes</b></span>
                     </label>
 
+                    <label class="toggle-misto">
+                        <input type="checkbox" name="gerar_ean_unitario" id="chk-unit-ean" {% if analise.gerar_ean_unitario %}checked{% endif %}>
+                        <span>Gerar <b>Novo GTIN</b> para o Unitário</span>
+                    </label>
+
                     <div id="campo-sku-secundario">
                         <div class="fg">
                             <label class="fl">SKU Secundário</label>
@@ -446,6 +451,7 @@
                             <input type="hidden" name="sku_manual" value="{{ analise.sku_manual }}">
                             <input type="hidden" name="sku_secundario" value="{{ analise.sku_secundario }}">
                             <input type="hidden" name="category_id_ml" value="{{ analise.category_id_ml }}">
+                            <input type="hidden" name="gerar_ean_unitario" value="{% if analise.gerar_ean_unitario %}on{% endif %}">
                             
                             {% if analise.status == 'vermelho' %}
                                 <div style="background:rgba(255,193,77,.1); color:var(--warn); padding:12px; border-radius:9px; font-size:11px; text-align:center; border:1px solid rgba(255,193,77,.2); margin-bottom:12px;">

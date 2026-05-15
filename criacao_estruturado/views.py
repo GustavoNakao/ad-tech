@@ -150,10 +150,11 @@ def painel_kits(request):
 
     if request.method == "POST":
         acao           = request.POST.get("acao")
-        sku_manual     = request.POST.get("sku_manual", "").strip()
-        sku_secundario = request.POST.get("sku_secundario", "").strip() or None
-        url_produto_ml = request.POST.get("url_produto_ml", "").strip() or None
-        e_misto        = bool(sku_secundario)
+        sku_manual        = request.POST.get("sku_manual", "").strip()
+        sku_secundario    = request.POST.get("sku_secundario", "").strip() or None
+        url_produto_ml    = request.POST.get("url_produto_ml", "").strip() or None
+        gerar_ean_unitario = request.POST.get("gerar_ean_unitario") == "on"
+        e_misto           = bool(sku_secundario)
 
         if acao == "analisar":
             if not sku_manual:
@@ -176,6 +177,7 @@ def painel_kits(request):
                 analise["sku_secundario"] = sku_secundario or ""
                 analise["category_id_ml"] = category_id_ml
                 analise["url_produto_ml"] = url_produto_ml or ""
+                analise["gerar_ean_unitario"] = gerar_ean_unitario
                 analise["categoria_origem"] = (
                     "via URL do produto" if url_produto_ml else "padrão Estruturado"
                 )
@@ -200,6 +202,7 @@ def painel_kits(request):
                 sku_origem=sku_manual,
                 sku_secundario=sku_secundario,
                 category_id_ml=category_id_ml,
+                gerar_ean_unitario=gerar_ean_unitario,
             )
             if resp["sucesso"]:
                 tipo = "Kit Misto" if e_misto else "Kit"

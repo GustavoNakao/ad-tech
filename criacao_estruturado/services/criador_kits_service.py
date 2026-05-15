@@ -979,6 +979,11 @@ class CriadorKitsService:
         self, category_id_ml: str, features: Dict, dados: Dict
     ) -> List[str]:
         lista_obrigatorios_nomes = []
+        termos_ignorar = [
+            "motivo de gtin vazio", "reason_for_no_gtin", "motivo de gtin isento",
+            "código universal", "ean", "gtin", "código de barras"
+        ]
+        
         if category_id_ml and category_id_ml != "979589":
             try:
                 logger.warning(f"[Ficha Tecnica] Verificando campos para Cat: {category_id_ml}")
@@ -988,8 +993,14 @@ class CriadorKitsService:
 
                 for f in obrigatorios_raw:
                     n = f.get("name")
+                    if not n: continue
+                    
+                    # Filtra termos de identificação que o sistema já resolve ou que o usuário pediu para tirar
+                    if any(t in n.lower() for t in termos_ignorar):
+                        continue
+
                     allowed_values = f.get("values", [])
-                    if n and n.lower() not in nomes_existentes:
+                    if n.lower() not in nomes_existentes:
                         valor_fisico = self._resolver_campo_fisico(n, dados)
                         if valor_fisico:
                             features[n] = valor_fisico
@@ -1088,13 +1099,14 @@ class CriadorKitsService:
         dados_completos: Dict,
         sku_kit_final: str,
         titulo_final: str,
+        forcar_unitario: bool = False,
     ) -> str:
         """
         Obtém ou gera um EAN para o kit.
-        Unitário (qtd=1) -> sem novo EAN.
+        Unitário (qtd=1) -> sem novo EAN, exceto se forcar_unitario for True.
         Kit (qtd>1) -> Novo EAN registrado na GS1 Brasil.
         """
-        if quantidade <= 1:
+        if quantidade <= 1 and not forcar_unitario:
             return ""
 
         obj, created = GtinKit.objects.get_or_create(
@@ -1305,11 +1317,12 @@ Resultado (8 dígitos):"""
         sku_origem: str,
         sku_secundario: Optional[str] = None,
         category_id_ml: Optional[str] = None,
+        gerar_ean_unitario: bool = False,
     ) -> Dict:
         """
         Cria a grade completa de 8 anúncios (1/2/3/4un x Clássico/Premium) no BaseLinker.
         """
-        logger.warning(f"Iniciando criação de GRADE (8 anúncios) -> SKU Origem={sku_origem}")
+        logger.warning(f"Iniciando criação de GRADE (8 anúncios) -> SKU Origem={sku_origem} | EAN Unitário={gerar_ean_unitario}")
 
         dados = self._baixar_dados_produto(pid)
         if not dados:
@@ -1456,7 +1469,7 @@ Resultado (8 dígitos):"""
                 logger.warning(f"Tag '{tag_name}' não encontrada no BaseLinker.")
 
             ean_final = ""
-            if anuncio.quantidade == 1:
+            if anuncio.quantidade == 1 and not gerar_ean_unitario:
                 ean_final = dados.get("ean", "")
 
             # Atualiza features por variação
@@ -1503,11 +1516,14 @@ Resultado (8 dígitos):"""
                 skus_criados.append(sku_novo)
                 ids_criados.append(id_kit)
 
-                if anuncio.quantidade > 1:
+                if anuncio.quantidade > 1 or (anuncio.quantidade == 1 and gerar_ean_unitario):
                     time.sleep(2)
-                    ean_final = self._obter_ean_kit(sku_origem, anuncio.quantidade, dados, sku_novo, titulo_final)
+                    ean_final = self._obter_ean_kit(
+                        sku_origem, anuncio.quantidade, dados, sku_novo, 
+                        titulo_final, forcar_unitario=(anuncio.quantidade == 1 and gerar_ean_unitario)
+                    )
 
-                if ean_final and anuncio.quantidade > 1:
+                if ean_final and (anuncio.quantidade > 1 or gerar_ean_unitario):
                     for k in list(features_var.keys()):
                         if "código universal" in k.lower() or "ean" in k.lower():
                             features_var[k] = ean_final
