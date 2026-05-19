@@ -55,10 +55,13 @@
         .nav-user a:hover { color:var(--text); background:rgba(255,255,255,.04); }
 
         /* PAGE HEADER */
-        .ph { padding:32px 0 22px; }
+        .ph { padding:32px 0 22px; display:flex; justify-content:space-between; align-items:flex-end; }
         .ph h1 { font-family:var(--fh); font-size:24px; font-weight:800; letter-spacing:-.4px; margin-bottom:4px; }
         .ph h1 span { color:var(--cyan); }
         .ph p { color:var(--muted); font-size:12px; }
+
+        .btn-history { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: var(--fh); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; transition: all 0.2s; }
+        .btn-history:hover { background: var(--surface2); border-color: var(--cyan); }
 
         /* METRICS */
         .mg { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
@@ -72,9 +75,15 @@
         .mv { font-family:var(--fh); font-size:28px; font-weight:800; line-height:1; }
         .ms { font-size:11px; color:var(--muted); margin-top:3px; }
 
-        /* LAYOUT */
-        .layout { display:grid; grid-template-columns:360px 1fr; gap:16px; align-items:start; }
-        .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; animation:fu .4s ease both; }
+        /* NOVO LAYOUT 2 COLUNAS */
+        .layout { display:grid; grid-template-columns:1fr 400px; gap:16px; align-items:start; }
+        .sticky-sidebar { position: sticky; top: 74px; }
+        @media (max-width: 1024px) {
+            .layout { grid-template-columns: 1fr; }
+            .sticky-sidebar { position: static; }
+        }
+
+        .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; animation:fu .4s ease both; margin-bottom: 16px; }
         .ch { display:flex; align-items:center; justify-content:space-between; padding:18px 20px 0; }
         .ch h2 { font-family:var(--fh); font-size:13px; font-weight:700; display:flex; align-items:center; gap:7px; }
         .ch h2 i { color:var(--cyan); font-size:11px; }
@@ -97,8 +106,8 @@
         #campo-sku-secundario.visivel { display:block; animation:fu .3s ease; }
 
         .btn-criar { width:100%; padding:12px; background:linear-gradient(135deg,#00c8ff,#007acc); border:none; border-radius:9px; color:#050810; font-family:var(--fh); font-size:13px; font-weight:700; cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:8px; }
-        .btn-criar:hover{transform:translateY(-2px);box-shadow:0 8px 22px -4px rgba(0,200,255,.3)}
-        .btn-criar.loading{pointer-events:none;opacity:.5}
+        .btn-criar:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 22px -4px rgba(0,200,255,.3)}
+        .btn-criar:disabled { pointer-events:none; opacity:.5; cursor: not-allowed; }
 
         .hint { margin-top:12px; background:rgba(0,200,255,.04); border:1px solid rgba(0,200,255,.1); border-radius:8px; padding:10px 13px; font-size:11px; color:var(--muted); display:flex; gap:8px; }
         .hint i{color:var(--cyan);margin-top:1px;flex-shrink:0}
@@ -123,16 +132,15 @@
         .ax{position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;padding:4px}
 
         /* ERRO DETALHE */
-        .erro-detail { margin-top:16px; background:rgba(255,77,109,0.05); border:1px solid rgba(255,77,109,0.3); border-radius:10px; padding:14px 16px; }
+        .erro-detail { margin-bottom:16px; background:rgba(255,77,109,0.05); border:1px solid rgba(255,77,109,0.3); border-radius:10px; padding:14px 16px; }
         .erro-detail-titulo { font-family:var(--fh); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--danger); margin-bottom:7px; display:flex; align-items:center; gap:6px; }
         .erro-detail-msg { font-size:11.5px; color:#e8a0ae; background:rgba(0,0,0,.2); border-radius:6px; padding:9px 12px; word-break:break-word; }
 
         /* ══ STATUS BANNER ══ */
-        .analise-wrap { margin-top:18px; border-top:1px solid var(--border); padding-top:18px; animation:fu .5s ease; }
         .analise-titulo { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
         .analise-titulo i{color:var(--cyan)}
 
-        .status-banner { border-radius:10px; padding:13px 15px; margin-bottom:12px; display:flex; align-items:flex-start; gap:11px; border:1px solid; }
+        .status-banner { border-radius:10px; padding:13px 15px; margin-bottom:16px; display:flex; align-items:flex-start; gap:11px; border:1px solid; }
         .status-banner.verde   { background:rgba(0,229,153,.06); border-color:rgba(0,229,153,.3); }
         .status-banner.amarelo { background:rgba(255,193,77,.06); border-color:rgba(255,193,77,.3); }
         .status-banner.vermelho{ background:rgba(255,77,109,.06); border-color:rgba(255,77,109,.3); }
@@ -142,88 +150,54 @@
         .verde .sb-label{color:var(--success)} .amarelo .sb-label{color:var(--warn)} .vermelho .sb-label{color:var(--danger)}
         .sb-msg{font-size:11px;color:var(--text);line-height:1.5;opacity:.85}
 
-        /* ══ GRADE DE 8 ANÚNCIOS ══ */
-        .grade-titulo { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:14px 0 10px; display:flex; align-items:center; gap:6px; }
-        .grade-titulo i{color:var(--cyan)}
+        /* ══ GRADE TABULAR DE 8 ANÚNCIOS (DATA DENSITY) ══ */
+        .table-responsive { overflow-x: auto; width: 100%; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 16px; background: var(--surface2); }
+        .data-table { width: 100%; border-collapse: collapse; font-family: var(--fm); font-variant-numeric: tabular-nums; }
+        .data-table th, .data-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; white-space: nowrap; }
+        .data-table tr:last-child td { border-bottom: none; }
+        .data-table th { text-align: left; font-size: 10px; text-transform: uppercase; color: var(--muted); font-weight: 600; background: rgba(0,0,0,0.2); }
+        
+        .data-table tr.premium { background: rgba(167,139,250,.03); }
+        .data-table tr.bloqueado { opacity: 0.6; background: rgba(255,77,109,.04); }
 
-        .grade-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-bottom:14px; }
-        .grade-card {
-            background:var(--surface2); border:1px solid var(--border); border-radius:9px;
-            padding:10px; text-align:center; position:relative; transition:border-color .2s;
-        }
+        .text-right { text-align: right !important; }
+        .text-premium { color: var(--purple); }
+        .text-normal { color: var(--text); }
+        .truncate-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px; display: inline-block; vertical-align: middle; }
 
-        .grade-card.bloqueado   { border-color:rgba(255,77,109,.3); opacity:.6; }
-        .grade-card.premium     { border-color:rgba(167,139,250,.2); background:rgba(167,139,250,.04); }
-
-        .badge-tipo {
-            position:absolute; top:-8px; left:50%; transform:translateX(-50%);
-            font-family:var(--fh); font-size:8px; font-weight:700;
-            padding:2px 7px; border-radius:12px; white-space:nowrap;
-        }
-
+        .badge-tipo { font-family:var(--fh); font-size:8px; font-weight:700; padding:2px 7px; border-radius:12px; white-space:nowrap; display:inline-block; margin-bottom: 2px; }
         .badge-tipo.tar-red { background:var(--purple); color:#fff; }
         .badge-tipo.blk     { background:var(--danger); color:#fff; }
 
-        .gc-label  { font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
-        .gc-qtd    { font-family:var(--fh); font-size:10px; color:var(--muted); margin-bottom:3px; }
-        .gc-guerra { font-family:var(--fh); font-size:15px; font-weight:800; color:var(--text); }
-        .gc-vitrine{ font-size:10px; color:var(--muted); margin-top:2px; }
-        .gc-vitrine span { color:var(--warn); }
-        .gc-frete  { font-size:9px; color:var(--muted); margin-top:3px; }
-        .gc-err    { font-size:9px; color:var(--danger); margin-top:3px; }
+        .price-promo { font-family: var(--fh); font-size: 16px; font-weight: 800; color: var(--text); }
+        .price-vitrine { font-size: 12px; color: var(--muted); }
+        .price-frete { font-size: 11px; color: var(--muted); }
 
-        /* Tabs da grade */
-        .grade-tabs { display:flex; gap:6px; margin-bottom:10px; }
-        .grade-tab {
-            flex:1; padding:6px; border-radius:7px; border:1px solid var(--border);
-            background:transparent; color:var(--muted); font-family:var(--fm); font-size:10px;
-            cursor:pointer; transition:all .2s; text-align:center;
-        }
-        .grade-tab.ativo { border-color:var(--cyan); color:var(--cyan); background:var(--cyan-dim); }
-        .grade-section { display:none; }
-        .grade-section.ativo { display:block; }
-
-        /* Preços cascade */
-        .preco-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:11px; }
-        .preco-card { background:var(--surface2); border:1px solid var(--border); border-radius:9px; padding:11px; text-align:center; position:relative; }
-
-
-        .pt{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
-        .pv{font-family:var(--fh);font-size:17px;font-weight:800;color:var(--text)}
-        .pu{font-size:9px;color:var(--muted);margin-top:2px}
-        .pu span{color:var(--success)}
-
-        .motivo-box { background:rgba(0,200,255,.04); border:1px solid rgba(0,200,255,.12); border-radius:8px; padding:9px 12px; font-size:11px; color:var(--muted); line-height:1.55; margin-bottom:9px; }
-        .motivo-box strong { display:block; font-family:var(--fh); font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:var(--cyan); margin-bottom:3px; }
         .upsell-box { background:rgba(255,193,77,.05); border:1px solid rgba(255,193,77,.2); border-radius:8px; padding:9px 12px; font-size:11px; color:var(--warn); }
 
         /* BLOQUEIO */
-        .bloqueio-box { background:rgba(255,77,109,.06); border:1px solid rgba(255,77,109,.3); border-radius:10px; padding:14px 16px; margin-top:16px; }
+        .bloqueio-box { background:rgba(255,77,109,.06); border:1px solid rgba(255,77,109,.3); border-radius:10px; padding:14px 16px; }
         .bloqueio-titulo { font-family:var(--fh); font-size:11px; font-weight:700; color:var(--danger); margin-bottom:6px; }
         .bloqueio-msg { font-size:12px; color:#e8a0ae; }
 
-        /* HISTORY */
-        .empty{text-align:center;padding:40px 20px;color:var(--muted)}
-        .empty i{font-size:26px;opacity:.2;display:block;margin-bottom:9px}
-        table{width:100%;border-collapse:collapse}
-        thead th{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:500;padding:0 13px 10px;text-align:left}
-        thead th:first-child{padding-left:20px} thead th:last-child{padding-right:20px;text-align:right}
-        tbody tr{border-top:1px solid var(--border);transition:background .15s}
-        tbody tr:hover{background:rgba(255,255,255,.015)}
-        tbody td{padding:11px 13px;font-size:12px}
-        tbody td:first-child{padding-left:20px} tbody td:last-child{padding-right:20px;text-align:right}
-        .sc{display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px 8px;font-size:11px}
-        .sc.kit{border-color:rgba(0,200,255,.22);color:var(--cyan);background:var(--cyan-dim)}
-        .arr{color:var(--muted);font-size:8px}
-        .ts{font-size:11px;color:var(--muted)}
+        /* OFFCANVAS HISTÓRICO */
+        .offcanvas-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 999; display: none; backdrop-filter: blur(4px); }
+        .offcanvas-overlay.open { display: block; animation: fadein 0.3s ease; }
+        .offcanvas { position: fixed; top: 0; right: -480px; width: 480px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); z-index: 1000; transition: right 0.3s ease; display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0,0,0,0.5); }
+        .offcanvas.open { right: 0; }
+        @media (max-width: 600px) { .offcanvas { width: 100%; right: -100%; } }
+
+        .empty { text-align:center; padding:40px 20px; color:var(--muted); }
+        .empty i { font-size:26px; opacity:.2; display:block; margin-bottom:9px; }
+        .sc { display:inline-flex; align-items:center; gap:4px; background:var(--surface2); border:1px solid var(--border2); border-radius:5px; padding:2px 8px; font-size:11px; }
+        .sc.kit { border-color:rgba(0,200,255,.22); color:var(--cyan); background:var(--cyan-dim); }
 
         @keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         @keyframes si{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes fadein{from{opacity:0}to{opacity:1}}
         .spinner{width:14px;height:14px;border:2px solid rgba(0,0,0,.2);border-top-color:#050810;border-radius:50%;animation:sp .6s linear infinite}
         @keyframes sp{to{transform:rotate(360deg)}}
 
-        @media(max-width:960px){.layout{grid-template-columns:1fr} .grade-grid{grid-template-columns:repeat(2,1fr)}}
-        @media(max-width:600px){.mg{grid-template-columns:1fr 1fr} .preco-grid{grid-template-columns:1fr} .grade-grid{grid-template-columns:repeat(2,1fr)}}
     </style>
 </head>
 <body>
@@ -248,8 +222,13 @@
 
 <div class="wrap">
     <div class="ph">
-        <h1>Gerador de <span>Kits</span></h1>
-        <p>Grade de 8 anúncios com Preço de Promoção e Vitrine calculados automaticamente</p>
+        <div>
+            <h1>Gerador de <span>Kits</span></h1>
+            <p>Grade de 8 anúncios com Preço de Promoção e Vitrine calculados automaticamente</p>
+        </div>
+        <button onclick="toggleHistory()" class="btn-history">
+            <i class="fa-solid fa-clock"></i> Histórico de Kits ({{ ultimos_kits|length }})
+        </button>
     </div>
 
     {% if messages %}
@@ -286,247 +265,269 @@
         </div>
     </div>
 
+    <!-- LAYOUT PRINCIPAL (60% / 40%) -->
     <div class="layout">
 
-        <!-- FORMULÁRIO -->
-        <div class="card" style="animation-delay:.18s">
-            <div class="ch">
-                <h2><i class="fa-solid fa-wand-magic-sparkles"></i> Criar Kit</h2>
-                <span class="chip">Manual</span>
-            </div>
-            <div class="cb">
-                <form method="POST" id="form-criar">
-                    {% csrf_token %}
-                    <input type="hidden" name="acao" value="analisar">
+        <!-- COLUNA ESQUERDA (60%) -->
+        <div>
+            <!-- FORMULÁRIO DE ANÁLISE -->
+            <div class="card" style="animation-delay:.18s">
+                <div class="ch">
+                    <h2><i class="fa-solid fa-wand-magic-sparkles"></i> Dados do Kit</h2>
+                    <span class="chip">Manual</span>
+                </div>
+                <div class="cb">
+                    <form method="POST" id="form-analisar">
+                        {% csrf_token %}
+                        <input type="hidden" name="acao" value="analisar">
 
-                    <div class="fg">
-                        <label class="fl">SKU do Produto Principal</label>
-                        <input type="text" name="sku_manual" id="sku-inp" class="fi"
-                               placeholder="Ex: 30565" autofocus autocomplete="off">
-                    </div>
-
-                    <div class="fg">
-                        <label class="fl" style="display:flex;align-items:center;gap:5px;">
-                            <i class="fa-brands fa-mercadopago" style="color:#00c8ff;"></i>
-                            URL do Produto no ML
-                            <span style="font-size:9px;color:#3a4a5c;margin-left:4px;">(opcional — para categoria correta)</span>
-                        </label>
-                        <input type="url" name="url_produto_ml" id="url-ml" class="fi"
-                               placeholder="https://www.mercadolivre.com.br/..." autocomplete="off">
-                        <span style="font-size:9px;color:#3a4a5c;margin-top:4px;display:block;">
-                            <i class="fa-solid fa-circle-info" style="color:#00c8ff;"></i>
-                            Se vazio, o kit vai para a categoria Estruturado (ID 979589).
-                        </span>
-                    </div>
-
-                    <!-- Toggle Kit Misto -->
-                    <label class="toggle-misto">
-                        <input type="checkbox" id="chk-misto">
-                        <span>Kit Misto — <b>2 SKUs diferentes</b></span>
-                    </label>
-
-                    <label class="toggle-misto">
-                        <input type="checkbox" name="gerar_ean_unitario" id="chk-unit-ean" {% if analise.gerar_ean_unitario %}checked{% endif %}>
-                        <span>Gerar <b>Novo GTIN</b> para o Unitário</span>
-                    </label>
-
-                    <div id="campo-sku-secundario">
                         <div class="fg">
-                            <label class="fl">SKU Secundário</label>
-                            <input type="text" name="sku_secundario" id="sku-sec" class="fi"
-                                   placeholder="Ex: 30566" autocomplete="off">
+                            <label class="fl">SKU do Produto Principal</label>
+                            <input type="text" name="sku_manual" id="sku-inp" class="fi"
+                                   placeholder="Ex: 30565" autofocus autocomplete="off" value="{{ analise.sku_manual|default:'' }}">
                         </div>
-                    </div>
 
-                    <button type="submit" class="btn-criar" id="btn-criar">
-                        <i class="fa-solid fa-magnifying-glass-chart"></i> Analisar Produto
-                    </button>
-                </form>
-
-                <div class="hint">
-                    <i class="fa-solid fa-circle-info"></i>
-                    <span>O sistema gera a grade de 8 anúncios (1/2/3/4un × Clássico/Premium) com Preço de Promoção e Vitrine automaticamente.</span>
-                </div>
-
-                <div class="ai-sec">
-                    <div class="ai-lbl">Gerado automaticamente</div>
-                    <div class="ai-row"><i class="fa-solid fa-heading" style="color:var(--cyan)"></i>Título SEO (máx. 60 chars)<span class="at tg">Gemini</span></div>
-                    <div class="ai-row"><i class="fa-solid fa-align-left" style="color:var(--cyan)"></i>Descrição estruturada<span class="at tg">Gemini</span></div>
-                    <div class="ai-row"><i class="fa-solid fa-tag" style="color:var(--success)"></i>Grade de 8 preços (Promoção + Vitrine)<span class="at ta">Engine v2</span></div>
-                    <div class="ai-row"><i class="fa-solid fa-weight-hanging" style="color:var(--success)"></i>Peso cubado vs real (MAX)<span class="at ta">Engine v2</span></div>
-                    <div class="ai-row"><i class="fa-solid fa-truck" style="color:var(--warn)"></i>Frete com desconto MercadoLíder 50%<span class="at tw">Engine v2</span></div>
-                </div>
-
-                {# ── ERRO DETALHE ── #}
-                {% if erro_detalhe %}
-                <div class="erro-detail">
-                    <div class="erro-detail-titulo"><i class="fa-solid fa-triangle-exclamation"></i> Detalhes do Erro</div>
-                    <div class="erro-detail-msg">{{ erro_detalhe }}</div>
-                </div>
-                {% endif %}
-
-                {# ── ANÁLISE + GRADE ── #}
-                {% if analise %}
-                <div class="analise-wrap">
-
-                    {% if analise.bloqueado %}
-                    <div class="bloqueio-box">
-                        <div class="bloqueio-titulo">🔴 PRODUTO BLOQUEADO</div>
-                        <div class="bloqueio-msg">{{ analise.motivo_bloqueio }}</div>
-                    </div>
-
-                    {% else %}
-
-                    <div class="analise-titulo"><i class="fa-solid fa-chart-bar"></i> Análise de Precificação {% if analise.e_misto %}<span style="color:var(--purple);margin-left:6px;">🔀 Kit Misto</span>{% endif %}</div>
-
-                    <!-- Status banner -->
-                    <div class="status-banner {{ analise.status }}">
-                        <div class="sb-emoji">{{ analise.status_emoji }}</div>
-                        <div class="sb-body">
-                            <div class="sb-label">{{ analise.status_label }}</div>
-                            <div class="sb-msg">{{ analise.status_mensagem }}</div>
+                        <div class="fg">
+                            <label class="fl" style="display:flex;align-items:center;gap:5px;">
+                                <i class="fa-brands fa-mercadopago" style="color:#00c8ff;"></i>
+                                URL do Produto no ML
+                                <span style="font-size:9px;color:#3a4a5c;margin-left:4px;">(opcional — para categoria correta)</span>
+                            </label>
+                            <input type="url" name="url_produto_ml" id="url-ml" class="fi"
+                                   placeholder="https://www.mercadolivre.com.br/..." autocomplete="off" value="{{ analise.url_produto_ml|default:'' }}">
                         </div>
+
+                        <!-- Toggle Kit Misto -->
+                        <label class="toggle-misto">
+                            <input type="checkbox" id="chk-misto" {% if analise.e_misto %}checked{% endif %}>
+                            <span>Kit Misto — <b>2 SKUs diferentes</b></span>
+                        </label>
+
+                        <label class="toggle-misto">
+                            <input type="checkbox" name="gerar_ean_unitario" id="chk-unit-ean" {% if analise.gerar_ean_unitario %}checked{% endif %}>
+                            <span>Gerar <b>Novo GTIN</b> para o Unitário</span>
+                        </label>
+
+                        <div id="campo-sku-secundario" class="{% if analise.e_misto %}visivel{% endif %}">
+                            <div class="fg">
+                                <label class="fl">SKU Secundário</label>
+                                <input type="text" name="sku_secundario" id="sku-sec" class="fi"
+                                       placeholder="Ex: 30566" autocomplete="off" value="{{ analise.sku_secundario|default:'' }}" {% if analise.e_misto %}required{% endif %}>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn-criar" id="btn-analisar">
+                            <i class="fa-solid fa-magnifying-glass-chart"></i> Analisar Produto
+                        </button>
+                    </form>
+
+                    <div class="hint">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <span>O sistema gera a grade de 8 anúncios (1/2/3/4un × Clássico/Premium) com Preço de Promoção e Vitrine automaticamente.</span>
                     </div>
 
-                    <!-- GRADE DE 8 ANÚNCIOS -->
+                    <div class="ai-sec">
+                        <div class="ai-lbl">Gerado automaticamente</div>
+                        <div class="ai-row"><i class="fa-solid fa-heading" style="color:var(--cyan)"></i><span class="truncate-title">Título SEO (máx. 60 chars)</span><span class="at tg">Gemini</span></div>
+                        <div class="ai-row"><i class="fa-solid fa-align-left" style="color:var(--cyan)"></i><span class="truncate-title">Descrição estruturada</span><span class="at tg">Gemini</span></div>
+                        <div class="ai-row"><i class="fa-solid fa-tag" style="color:var(--success)"></i><span class="truncate-title">Grade de 8 preços (Promoção + Vitrine)</span><span class="at ta">Engine v2</span></div>
+                        <div class="ai-row"><i class="fa-solid fa-weight-hanging" style="color:var(--success)"></i><span class="truncate-title">Peso cubado vs real (MAX)</span><span class="at ta">Engine v2</span></div>
+                        <div class="ai-row"><i class="fa-solid fa-truck" style="color:var(--warn)"></i><span class="truncate-title">Frete com desconto MercadoLíder 50%</span><span class="at tw">Engine v2</span></div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── ERRO DETALHE ── #}
+            {% if erro_detalhe %}
+            <div class="erro-detail">
+                <div class="erro-detail-titulo"><i class="fa-solid fa-triangle-exclamation"></i> Detalhes do Erro</div>
+                <div class="erro-detail-msg">{{ erro_detalhe }}</div>
+            </div>
+            {% endif %}
+
+            {# ── GRADE DE ANÚNCIOS ── #}
+            {% if analise and not analise.bloqueado %}
+            <div class="card" style="animation-delay:.2s">
+                <div class="ch" style="padding-bottom: 15px;">
+                    <h2><i class="fa-solid fa-table-cells"></i> Grade de 8 Anúncios (Data Density)</h2>
+                </div>
+                <div class="cb" style="padding-top: 0;">
+                    
                     {% if analise.anuncios %}
-                    <div class="grade-titulo"><i class="fa-solid fa-table-cells"></i> Grade de 8 Anúncios</div>
-
-                    <div class="grade-tabs">
-                        <button class="grade-tab ativo" onclick="mudarTab(this, 'promocao')">💰 Preço de Promoção</button>
-                        <button class="grade-tab" onclick="mudarTab(this, 'vitrine')">🏷️ Preço de Vitrine</button>
-                    </div>
-
-                    <!-- Tab Promoção -->
-                    <div class="grade-section ativo" id="tab-promocao">
-                        <div class="grade-grid">
-                        {% for a in analise.anuncios %}
-                        <div class="grade-card {% if a.bloqueado %}bloqueado{% elif a.modalidade == 'premium' %}premium{% endif %}">
-                            {% if a.tarifa_reduzida %}<div class="badge-tipo tar-red">🎯 Tar. Red.</div>{% endif %}
-                            {% if a.bloqueado %}<div class="badge-tipo blk">🔴 Bloq.</div>{% endif %}
-                            <div class="gc-label">{{ a.modalidade|upper }}</div>
-                            <div class="gc-qtd">{{ a.quantidade }}un</div>
-                            <div class="gc-guerra">R$ {{ a.preco_promocao|floatformat:2 }}</div>
-                            <div class="gc-frete">Frete: R${{ a.custo_logistico|floatformat:2 }}</div>
-                            {% if a.erros %}<div class="gc-err">⚠️ {{ a.erros|join:", " }}</div>{% endif %}
-                        </div>
-                        {% endfor %}
-                        </div>
-                    </div>
-
-                    <!-- Tab Vitrine -->
-                    <div class="grade-section" id="tab-vitrine">
-                        <div class="grade-grid">
-                        {% for a in analise.anuncios %}
-                        <div class="grade-card {% if a.bloqueado %}bloqueado{% elif a.modalidade == 'premium' %}premium{% endif %}">
-                            {% if a.tarifa_reduzida %}<div class="badge-tipo tar-red">🎯 Tar. Red.</div>{% endif %}
-                            {% if a.bloqueado %}<div class="badge-tipo blk">🔴 Bloq.</div>{% endif %}
-                            <div class="gc-label">{{ a.modalidade|upper }}</div>
-                            <div class="gc-qtd">{{ a.quantidade }}un</div>
-                            <div class="gc-guerra">R$ {{ a.preco_vitrine|floatformat:2 }}</div>
-                            <div class="gc-vitrine">Promoção: <span>R$ {{ a.preco_promocao|floatformat:2 }}</span></div>
-                        </div>
-                        {% endfor %}
-                        </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Ref</th>
+                                    <th>Qtd</th>
+                                    <th>Modalidade</th>
+                                    <th class="text-right">Vitrine</th>
+                                    <th class="text-right">Promoção</th>
+                                    <th class="text-right">Frete</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for a in analise.anuncios %}
+                                <tr class="{% if a.bloqueado %}bloqueado{% elif a.modalidade == 'premium' %}premium{% endif %}">
+                                    <td>
+                                        <div style="display:flex; flex-direction:column; gap:4px;">
+                                            {% if a.bloqueado %}<span class="badge-tipo blk" style="position:static; display:inline-block; width:fit-content;">🔴 Bloq.</span>{% endif %}
+                                            {% if a.tarifa_reduzida %}<span class="badge-tipo tar-red" style="position:static; display:inline-block; width:fit-content;">🎯 Tar. Red.</span>{% endif %}
+                                        </div>
+                                    </td>
+                                    <td style="font-weight: 600;">{{ a.quantidade }}un</td>
+                                    <td>
+                                        <span class="{% if a.modalidade == 'premium' %}text-premium{% else %}text-normal{% endif %}" style="font-size: 11px; font-weight: 600; text-transform: uppercase;">
+                                            {{ a.modalidade }}
+                                        </span>
+                                        {% if a.erros %}<div style="font-size:10px; color:var(--danger); margin-top:4px; max-width:150px; white-space:normal;">⚠️ {{ a.erros|join:", " }}</div>{% endif %}
+                                    </td>
+                                    <td class="text-right price-vitrine">R$ {{ a.preco_vitrine|floatformat:2 }}</td>
+                                    <td class="text-right price-promo">R$ {{ a.preco_promocao|floatformat:2 }}</td>
+                                    <td class="text-right price-frete">R$ {{ a.custo_logistico|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                     {% endif %}
 
-                    {% if analise.category_id_ml %}
-                    <div style="margin-bottom:12px;padding:8px 12px;background:rgba(0,200,255,0.06);border:1px solid rgba(0,200,255,0.15);border-radius:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                        <i class="fa-brands fa-mercadopago" style="color:#00c8ff;font-size:13px;"></i>
-                        <span style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Categoria ML</span>
-                        <span style="font-family:var(--fm);font-size:12px;color:#e6f0ff;font-weight:600;">{{ analise.category_id_ml }}</span>
-                        <span style="font-size:9px;color:#3a4a5c;margin-left:auto;">{{ analise.categoria_origem }}</span>
-                    </div>
-                    {% endif %}
                     {% if analise.alerta_upsell %}
                     <div class="upsell-box">{{ analise.alerta_upsell }}</div>
                     {% endif %}
+                </div>
+            </div>
+            {% endif %}
 
-                    <!-- BOTÃO DE CONFIRMAÇÃO (CRIAR KIT) -->
-                    <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:20px;">
-                        <form method="POST">
-                            {% csrf_token %}
-                            <input type="hidden" name="acao" value="confirmar_criacao">
-                            <input type="hidden" name="sku_manual" value="{{ analise.sku_manual }}">
-                            <input type="hidden" name="sku_secundario" value="{{ analise.sku_secundario }}">
-                            <input type="hidden" name="category_id_ml" value="{{ analise.category_id_ml }}">
-                            <input type="hidden" name="gerar_ean_unitario" value="{% if analise.gerar_ean_unitario %}on{% endif %}">
+        </div><!-- Fim Coluna Esquerda -->
+
+        <!-- COLUNA DIREITA (40% - STICKY) -->
+        <div class="sticky-sidebar">
+            <div class="card" style="animation-delay:.24s">
+                <div class="ch">
+                    <h2><i class="fa-solid fa-clipboard-list"></i> Resumo do Kit</h2>
+                </div>
+                <div class="cb">
+                    {% if analise %}
+                        {% if analise.bloqueado %}
+                            <div class="bloqueio-box">
+                                <div class="bloqueio-titulo">🔴 PRODUTO BLOQUEADO</div>
+                                <div class="bloqueio-msg">{{ analise.motivo_bloqueio }}</div>
+                            </div>
+                        {% else %}
+                            <!-- Status banner -->
+                            <div class="status-banner {{ analise.status }}">
+                                <div class="sb-emoji">{{ analise.status_emoji }}</div>
+                                <div class="sb-body">
+                                    <div class="sb-label truncate-title" style="white-space: normal; max-width: 100%;">{{ analise.status_label }}</div>
+                                    <div class="sb-msg truncate-title" style="white-space: normal; max-width: 100%;">{{ analise.status_mensagem }}</div>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                                <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">SKU Origem:</div>
+                                <div style="font-family: var(--fm); font-size: 16px; font-weight: bold; color: var(--text);">{{ analise.sku_manual }}</div>
+                            </div>
+
+                            {% if analise.e_misto %}
+                            <div style="margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                                <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">SKU Secundário (Misto):</div>
+                                <div style="font-family: var(--fm); font-size: 16px; font-weight: bold; color: var(--purple);">{{ analise.sku_secundario }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if analise.category_id_ml %}
+                            <div style="margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                                <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">Categoria ML:</div>
+                                <div style="font-size: 14px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-brands fa-mercadopago" style="color:#00c8ff;"></i> {{ analise.category_id_ml }}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <div style="margin-bottom: 24px;">
+                                <div style="font-size: 11px; color: var(--muted); margin-bottom: 6px;">Gerar GTIN Unitário:</div>
+                                <div>{% if analise.gerar_ean_unitario %}<span class="chip" style="background:rgba(0,229,153,.1);color:var(--success); border-color: rgba(0,229,153,0.3); font-size: 11px;">Sim, Gerar Novo</span>{% else %}<span class="chip" style="background:rgba(255,193,77,.1);color:var(--warn); border-color: rgba(255,193,77,0.3); font-size: 11px;">Não Gerar</span>{% endif %}</div>
+                            </div>
+
+                            <!-- O formulário de criação fica escondido aqui -->
+                            <form method="POST" id="form-criacao">
+                                {% csrf_token %}
+                                <input type="hidden" name="acao" value="confirmar_criacao">
+                                <input type="hidden" name="sku_manual" value="{{ analise.sku_manual }}">
+                                <input type="hidden" name="sku_secundario" value="{{ analise.sku_secundario }}">
+                                <input type="hidden" name="category_id_ml" value="{{ analise.category_id_ml }}">
+                                <input type="hidden" name="gerar_ean_unitario" value="{% if analise.gerar_ean_unitario %}on{% endif %}">
+                            </form>
                             
                             {% if analise.status == 'vermelho' %}
                                 <div style="background:rgba(255,193,77,.1); color:var(--warn); padding:12px; border-radius:9px; font-size:11px; text-align:center; border:1px solid rgba(255,193,77,.2); margin-bottom:12px;">
                                     <i class="fa-solid fa-triangle-exclamation"></i> <b>ATENÇÃO:</b> Margem Insuficiente. A criação está liberada para teste, mas verifique os preços.
                                 </div>
                             {% endif %}
-                            
-                            <button type="submit" class="btn-criar" style="background:linear-gradient(135deg,#00e599,#009e6a);" id="btn-confirmar">
-                                <i class="fa-solid fa-layer-group"></i> Criar Grade Completa (8 Anúncios)
+
+                            <button type="submit" form="form-criacao" class="btn-criar" style="background:linear-gradient(135deg,#00e599,#009e6a);" id="btn-confirmar">
+                                <i class="fa-solid fa-layer-group"></i> Criar Kit no BaseLinker
                             </button>
-                            <p style="font-size:10px; color:var(--muted); text-align:center; margin-top:8px;">
-                                <i class="fa-solid fa-robot"></i> A IA gerará 8 títulos e descrições únicas. Este processo pode levar até 30 segundos.
+                            <p style="font-size:10px; color:var(--muted); text-align:center; margin-top:10px;">
+                                <i class="fa-solid fa-robot"></i> A IA gerará 8 títulos únicos.<br>Este processo pode levar até 30 segundos.
                             </p>
-                        </form>
-                    </div>
-
-                    {% endif %}{# fim bloqueado #}
+                        {% endif %}
+                    {% else %}
+                        <div class="empty">
+                            <i class="fa-solid fa-wand-magic-sparkles" style="font-size: 28px; color: var(--muted); margin-bottom: 12px; display: block; opacity: 0.3;"></i>
+                            <p style="font-size: 13px; color: var(--muted); font-weight: 500;">Aguardando produto...</p>
+                            <p style="font-size: 11px; color: var(--muted); margin-top: 6px; max-width: 200px; margin-left: auto; margin-right: auto;">Preencha o SKU principal na esquerda e clique em Analisar Produto.</p>
+                        </div>
+                    {% endif %}
                 </div>
-                {% endif %}{# fim analise #}
-
             </div>
+        </div><!-- Fim Coluna Direita -->
+
+    </div>
+</div>
+
+<!-- OFFCANVAS HISTÓRICO -->
+<div class="offcanvas-overlay" id="historyOverlay" onclick="toggleHistory()"></div>
+<div class="offcanvas" id="historyDrawer">
+    <div class="ch" style="border-bottom: 1px solid var(--border); padding-bottom: 18px;">
+        <h2><i class="fa-solid fa-clock-rotate-left"></i> Últimos Kits Criados</h2>
+        <button onclick="toggleHistory()" style="background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="cb" style="overflow-y: auto; flex: 1; padding: 0;">
+        {% if ultimos_kits %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Kit</th>
+                    <th style="text-align:center;">Ver</th>
+                    <th class="text-right">Criado em</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for kit in ultimos_kits %}
+                <tr>
+                    <td>
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <span class="sc kit truncate-title" title="{{ kit.sku_kit }}" style="width:fit-content; max-width: 220px;"><i class="fa-solid fa-layer-group"></i>{{ kit.sku_kit }}</span>
+                            <span class="truncate-title" style="font-size:10px; color:var(--muted); max-width: 220px;"><i class="fa-solid fa-arrow-turn-up fa-rotate-90" style="margin-right: 4px;"></i> de {{ kit.sku_origem }}</span>
+                        </div>
+                    </td>
+                    <td style="text-align:center;">
+                        <a href="https://panel-u.baselinker.com/inventory_bundles#product:{{ kit.id_kit }}#tab:general"
+                           target="_blank" class="sc" style="text-decoration:none; color:#00c8ff; border-color: rgba(0,200,255,0.2);"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                    </td>
+                    <td class="text-right" style="font-size:11px; color:var(--muted);">{{ kit.criado_em|date:"d/m H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <i class="fa-solid fa-box-open"></i>
+            <p>Nenhum kit criado ainda.</p>
         </div>
-
-        <!-- HISTÓRICO -->
-        <div class="card" style="animation-delay:.24s">
-            <div class="ch">
-                <h2><i class="fa-solid fa-clock-rotate-left"></i> Últimos Kits Criados</h2>
-                {% if ultimos_kits %}<span class="chip">{{ ultimos_kits|length }} recentes</span>{% endif %}
-            </div>
-            <div class="cb" style="padding-left:0;padding-right:0;padding-top:12px;">
-                {% if ultimos_kits %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Produto Original</th>
-                            <th>Kit Criado</th>
-                            <th>Ver no BaseLinker</th>
-                            <th>Criado em</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for kit in ultimos_kits %}
-                        <tr>
-                            <td><span class="sc"><i class="fa-solid fa-barcode"></i>{{ kit.sku_origem }}</span></td>
-                            <td>
-                                <span style="display:flex;align-items:center;gap:6px;">
-                                    <i class="fa-solid fa-arrow-right arr"></i>
-                                    <span class="sc kit"><i class="fa-solid fa-layer-group"></i>{{ kit.sku_kit }}</span>
-                                </span>
-                            </td>
-                            <td>
-                                <a href="https://panel-u.baselinker.com/inventory_bundles#product:{{ kit.id_kit }}#tab:general"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   title="Abrir produto {{ kit.id_kit }} no BaseLinker"
-                                   style="display:inline-flex;align-items:center;gap:5px;color:#1a73e8;font-size:12px;font-weight:600;text-decoration:none;">
-                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                                    ID {{ kit.id_kit }}
-                                </a>
-                            </td>
-                            <td><span class="ts">{{ kit.criado_em|date:"d/m/Y H:i" }}</span></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="empty">
-                    <i class="fa-solid fa-box-open"></i>
-                    <p>Nenhum kit criado ainda.</p>
-                    <small style="font-size:10px;color:#3a4a5c;">Use o formulário ao lado para criar o primeiro.</small>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-
+        {% endif %}
     </div>
 </div>
 
@@ -545,37 +546,30 @@ document.getElementById('chk-misto').addEventListener('change', function() {
     }
 });
 
-// Tabs da grade
-function mudarTab(btn, id) {
-    document.querySelectorAll('.grade-tab').forEach(t => t.classList.remove('ativo'));
-    document.querySelectorAll('.grade-section').forEach(s => s.classList.remove('ativo'));
-    btn.classList.add('ativo');
-    document.getElementById('tab-' + id).classList.add('ativo');
-}
-
-// Loading no botão
-document.getElementById('form-criar').addEventListener('submit', function(e) {
+// Loading no botão de Analisar
+document.getElementById('form-analisar').addEventListener('submit', function(e) {
     const inp = document.getElementById('sku-inp');
     if (!inp.value.trim()) { e.preventDefault(); return; }
-    const btn = document.getElementById('btn-criar');
+    const btn = document.getElementById('btn-analisar');
     if(btn) {
+        btn.disabled = true; // Prevenção de duplo clique
         btn.classList.add('loading');
         btn.innerHTML = '<div class="spinner"></div> Analisando...';
     }
 });
 
-// Loading no botão de confirmação
-document.querySelectorAll('form').forEach(f => {
-    if(f.querySelector('input[name="acao"][value="confirmar_criacao"]')) {
-        f.addEventListener('submit', function() {
-            const btn = document.getElementById('btn-confirmar');
-            if(btn) {
-                btn.classList.add('loading');
-                btn.innerHTML = '<div class="spinner"></div> Gerando Grade (IA)...';
-            }
-        });
-    }
-});
+// Loading no botão de Confirmação (Criar Kit)
+const formCriacao = document.getElementById('form-criacao');
+if (formCriacao) {
+    formCriacao.addEventListener('submit', function(e) {
+        const btn = document.getElementById('btn-confirmar');
+        if(btn) {
+            btn.disabled = true; // Prevenção de duplo clique
+            btn.classList.add('loading');
+            btn.innerHTML = '<div class="spinner"></div> Processando...';
+        }
+    });
+}
 
 // Auto-dismiss alerts
 document.querySelectorAll('.alert').forEach(function(a) {
@@ -585,6 +579,12 @@ document.querySelectorAll('.alert').forEach(function(a) {
         setTimeout(function(){ a.remove(); }, 400);
     }, 7000);
 });
+
+// Offcanvas Toggle
+function toggleHistory() {
+    document.getElementById('historyDrawer').classList.toggle('open');
+    document.getElementById('historyOverlay').classList.toggle('open');
+}
 </script>
 </body>
 </html>

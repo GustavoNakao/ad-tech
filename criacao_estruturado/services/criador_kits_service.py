@@ -453,6 +453,9 @@ R: [Resposta curta, confiante e que elimine a dúvida completamente]
 P: [Pergunta direta como o comprador faria]
 R: [Resposta curta, confiante e que elimine a dúvida completamente]
 
+O QUE VEM NO KIT
+- [Produto 1] x [Quantidade]
+
 IDEAL PARA
 [Parágrafo único de fechamento consolidando usos, públicos e situações onde o produto se destaca. Finalize com afirmação de autoridade ou qualidade que reforce a decisão de compra.]
 
@@ -586,7 +589,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
             res_tit = self.gemini.chat(
                 system_prompt=self.PROMPT_TITULO,
                 user_input=input_prompt,
-                modelo="gemini-1.5-flash",
+                modelo="gemini-2.5-flash",
             )
 
             try:
@@ -639,7 +642,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
             res_tit = self.gemini.chat(
                 system_prompt=self.PROMPT_TITULO_KITS,
                 user_input=input_prompt,
-                modelo="gemini-1.5-flash",
+                modelo="gemini-2.5-flash",
             )
 
             try:
@@ -707,18 +710,24 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
 
         max_tentativas = 3
         desc = ""
+        feedback_erro = ""
 
         for tentativa in range(max_tentativas):
+            input_prompt = f"Título Gerado: {titulo}\n{contexto}"
+            if feedback_erro:
+                input_prompt += f"\n\nATENÇÃO — Erros na tentativa anterior:\n{feedback_erro}\nCorrija no próximo JSON."
+
             res_copy = self.gemini.chat(
                 system_prompt=self.PROMPT_COPY,
-                user_input=f"Título Gerado: {titulo}\n{contexto}",
-                modelo="gemini-1.5-flash",
+                user_input=input_prompt,
+                modelo="gemini-2.5-flash",
             )
 
             try:
                 if not res_copy:
                     logger.warning(f"Descrição: resposta vazia na tentativa {tentativa + 1}.")
-                    break
+                    feedback_erro = "A IA retornou vazio. Responda com o JSON completo."
+                    continue
 
                 data_copy = json.loads(res_copy.strip())
                 desc_temp = data_copy.get("descricao", "")
@@ -731,6 +740,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
                 else:
                     secoes_faltando = [s for s in SECOES_OBRIGATORIAS if s not in desc_temp]
                     logger.warning(f"Tentativa {tentativa + 1}: seções ausentes: {secoes_faltando}")
+                    feedback_erro = f"Faltaram as seções obrigatórias: {secoes_faltando}"
                     if tentativa == max_tentativas - 1:
                         # Aceita o melhor que tiver na última tentativa
                         desc = desc_temp
@@ -739,6 +749,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
             except Exception as e:
                 res_snippet = res_copy[:200] if res_copy else "None"
                 logger.warning(f"Falha no JSON da Descrição (tentativa {tentativa + 1}): {e} | {res_snippet}")
+                feedback_erro = f"O formato retornado não foi um JSON válido ({e}). A resposta parecia cortada. Gere um JSON completo."
 
         return desc or descricao_atual
 
@@ -1184,36 +1195,82 @@ class CriadorKitsService:
         ncm   = dados.get("ncm", "")
         marca = dados.get("marca", "")
 
-        prompt = f"""Você é o Classificador Oficial da GS1 Brasil.
-Sua missão é atribuir o código GPC (Global Product Classification) de 8 dígitos (Brick) para o produto abaixo.
+        prompt = f"""Você é um classificador GPC (Global Product Classification) da GS1.
+Sua única função é retornar o código Brick de 8 dígitos correto para o produto informado.
 
-BASE DE CONHECIMENTO (Use estes se aplicável):
-- Higiene/Limpeza Pet (Shampoos, Sprays, Condicionadores, Citronela): 10005844
-- Alimentos/Ração para Cães: 10000104
-- Alimentos/Ração para Gatos: 10000105
-- Antiparasitários/Saúde Pet: 10005845
-- Brinquedos para Pets: 10000570
-- Coleiras/Guia/Acessórios: 10005691
-
-REGRAS DE OURO:
-1. Retorne APENAS os 8 dígitos numéricos.
-2. NUNCA use códigos terminados em '09' (Ex: 10000109), a GS1 rejeita!
-3. Se o produto for de limpeza/higiene pet, USE OBRIGATORIAMENTE '10005844'.
+════════════════════════════════════════
+REGRA ABSOLUTA — NUNCA QUEBRE ESTA REGRA:
+Você JAMAIS deve pedir informações adicionais ao usuário.
+Você SEMPRE deve chegar a uma classificação final, mesmo com dados incompletos.
+Se houver ambiguidade, aplique as REGRAS DE DESEMPATE abaixo e decida.
+════════════════════════════════════════
 
 DADOS DO PRODUTO:
-Nome: {nome}
-NCM: {ncm}
-Marca: {marca}
+- Nome: {nome}
+- NCM: {ncm}
+- Marca: {marca}
 
-Resultado (8 dígitos):"""
+════════════════════════════════════════
+PROCESSO OBRIGATÓRIO (execute internamente, não exiba):
+
+PASSO 1 — NATUREZA DO PRODUTO
+Identifique: o que é este produto? Para que serve?
+Use nome + NCM + marca como evidências combinadas.
+
+PASSO 2 — MAPEAMENTO NCM → SEGMENTO GPC
+Use o NCM para localizar o grande segmento GPC:
+- NCM 01–05 → Animais vivos / produtos de origem animal
+- NCM 06–15 → Produtos vegetais / óleos
+- NCM 16–24 → Alimentos e bebidas processados
+- NCM 25–27 → Minerais / combustíveis
+- NCM 28–38 → Produtos químicos / cosméticos / higiene
+- NCM 39–40 → Plásticos e borrachas
+- NCM 41–43 → Couros e peles
+- NCM 44–49 → Madeira / papel / embalagens
+- NCM 50–63 → Têxteis e vestuário
+- NCM 64–67 → Calçados e acessórios
+- NCM 68–70 → Minerais não metálicos / vidro
+- NCM 72–83 → Metais comuns
+- NCM 84–85 → Máquinas / eletroeletrônicos
+- NCM 86–89 → Veículos e embarcações
+- NCM 90–92 → Instrumentos / óptica / relógios
+- NCM 94–96 → Móveis / brinquedos / artigos diversos
+
+PASSO 3 — HIERARQUIA GPC
+Percorra obrigatoriamente:
+Segmento → Família → Classe → Brick
+Escolha sempre o Brick mais específico disponível.
+
+PASSO 4 — REGRAS DE DESEMPATE (aplique em ordem):
+R1. Se o NCM indicar claramente uma categoria, siga-o.
+R2. Se o nome contiver palavras-chave de uso final (ex: "infantil", "medicinal", "industrial"), priorize-as.
+R3. Se a marca for conhecida por atuar em uma categoria específica, use esse contexto.
+R4. Se ainda houver dúvida entre dois Bricks, escolha o mais genérico entre os candidatos.
+R5. NUNCA retorne vazio. Em último caso, classifique pelo NCM puro.
+
+════════════════════════════════════════
+FORMATO DE SAÍDA (exiba exatamente assim):
+
+Brick GPC   : [8 dígitos]
+Segmento    : [nome do segmento]
+Família     : [nome da família]
+Classe      : [nome da classe]
+Brick       : [descrição do brick]
+Confiança   : [Alta / Média / Baixa]
+Justificativa: [1 a 3 frases explicando a escolha e qual regra de desempate foi usada, se aplicável]"""
 
         try:
             groq = GroqClient()
             res = groq.chat(prompt, model="llama-3.3-70b-versatile")
-            gpc = "".join(filter(str.isdigit, res))
-            if len(gpc) == 8 and not gpc.endswith("09"):
-                return gpc
-            logger.warning(f"GPC inválido sugerido ({gpc}), usando fallback 10005844.")
+            
+            # Extrair o primeiro número de 8 dígitos do resultado (o Brick GPC)
+            match = re.search(r'\b(\d{8})\b', res)
+            if match:
+                gpc = match.group(1)
+                if not gpc.endswith("09"):
+                    return gpc
+            
+            logger.warning(f"GPC inválido sugerido ou formato incorreto. IA respondeu:\n{res}")
         except Exception as e:
             logger.error(f"Erro Groq GPC: {e}")
 
