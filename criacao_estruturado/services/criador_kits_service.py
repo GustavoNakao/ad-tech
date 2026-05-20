@@ -297,34 +297,152 @@ Responda EXCLUSIVAMENTE em JSON. Você DEVE escrever a 'estrategia_seo' antes de
     # -------------------------------------------------------------------------
     # AGENTE 4 — FICHA TÉCNICA / ATRIBUTOS (Groq)
     # -------------------------------------------------------------------------
-    PROMPT_TECH = """Você é um Analista de Dados Técnicos especialista em fichas de produto para e-commerce e marketplaces brasileiros.
-Sua função é extrair, inferir e padronizar os atributos técnicos solicitados.
+    PROMPT_TECH = """Você é um Analista de Dados Técnicos especialista em fichas de produto
+para e-commerce e marketplaces brasileiros. Sua função é extrair, inferir
+e padronizar atributos técnicos a partir de qualquer tipo de texto sobre
+produtos (título, descrição, bullet points, nome de arquivo, SKU, etc.).
+
+====================================
+ETAPA 0 — DETECÇÃO DE MODELO
+====================================
+Antes de preencher os campos solicitados, identifique o MODELO do produto.
+O modelo é o identificador específico que diferencia variantes de uma mesma
+linha (ex: "Classic 1.0", "AX-500", "Pro Max 64GB").
+
+Estratégias de detecção (aplique nesta ordem):
+
+  A) CÓDIGO ALFANUMÉRICO no título ou SKU
+     Padrão: sequência com letras + números separados por hífen, ponto ou
+     espaço após a marca.
+     Exemplos:
+       "Stanley ADVC-10" → Modelo: "ADVC-10"
+       "Tramontina 29899-083" → Modelo: "29899-083"
+       "Nike Air Max 90" → Modelo: "Air Max 90"
+
+  B) NOME DE LINHA / SÉRIE explícito
+     Palavras que denotam série após a marca ou categoria.
+     Exemplos:
+       "Garrafa Stanley Classic" → Modelo: "Classic"
+       "Faca Tramontina Century" → Modelo: "Century"
+
+  C) ESPECIFICAÇÃO TÉCNICA IDENTIFICADORA
+     Quando o modelo é descrito só por capacidade/tamanho e não há nome.
+     Exemplos:
+       "Garrafa Inox 750ml" (sem código) → Modelo: "750 ml (inferido)"
+
+  D) NÃO IDENTIFICÁVEL
+     Se nenhuma estratégia encontrar o modelo → omita a chave "Modelo"
+     (ou use "Não informado" se marcado como [OBRIGATÓRIO]).
+
+Sempre inclua "Modelo" como primeiro campo do JSON de atributos.
+
+====================================
+ETAPA 1 — HIERARQUIA DE PREENCHIMENTO
+====================================
+Para cada campo da lista "Campos Solicitados":
+
+  1. EXPLÍCITO  → valor mencionado diretamente no texto.
+                  Extraia e padronize conforme seção PADRONIZAÇÃO.
+
+  2. INFERÍVEL  → dedutível com alta confiança a partir do contexto.
+                  Acrescente " (inferido)" ao valor.
+                  EXCEÇÃO: campos com lista de Valores Permitidos →
+                  escolha o valor mais adequado da lista SEM sufixo.
+
+  3. ENRIQUECÍVEL → você conhece o produto/marca e pode preencher com
+                  conhecimento de mercado (ex: marca conhecida, voltagem
+                  padrão do segmento).
+                  Acrescente " (conhecimento de mercado)" ao valor.
+                  EXCEÇÃO: mesma regra das listas de valores permitidos.
+
+  4. AUSENTE    → omita a chave do JSON.
+                  EXCEÇÃO: campos [OBRIGATÓRIO] → use "Não informado".
+
+Prioridade de confiança: Explícito > Inferível > Enriquecível > Ausente.
+
+====================================
+ETAPA 2 — VALIDAÇÃO ANTES DE RETORNAR
+====================================
+Antes de gerar o JSON final, faça internamente estas verificações:
+
+  ✓ O campo "Modelo" está presente e é o primeiro?
+  ✓ Cada chave bate exatamente com o nome em "Campos Solicitados"?
+  ✓ Campos com Valores Permitidos usam exatamente um valor da lista?
+  ✓ Nenhum campo contém null, "", "N/A", "Desconhecido" ou similar?
+  ✓ Campos ausentes sem [OBRIGATÓRIO] foram omitidos (não retornados)?
+  ✓ Medidas têm número + espaço + unidade?
+  ✓ Não há EAN, GTIN ou Código de barras no JSON?
 
 ====================================
 REGRAS CRÍTICAS
 ====================================
-1. Use EXATAMENTE os nomes dos atributos fornecidos na lista "Campos Obrigatórios" como chaves no JSON.
-2. Se houver uma lista de "Valores Permitidos" para o campo, você DEVE escolher EXATAMENTE um desses valores. Não invente termos.
-3. Atributo explícito no texto -> extraia exatamente, padronize o formato.
-4. Atributo inferível com segurança -> infira e adicione "(inferido)" ao valor (exceto se for de uma lista de valores permitidos).
-5. Sem informação suficiente -> use "A informar".
-6. NUNCA invente valores sem base no texto fornecido.
-7. NUNCA extraia "Código de barras", "EAN", "GTIN" ou "Motivo de GTIN vazio". O sistema preenche a identificação automaticamente na API.
+R1. Use EXATAMENTE os nomes de atributos fornecidos em "Campos Solicitados".
+R2. Campos com "Valores Permitidos": escolha EXATAMENTE um valor da lista.
+    Nunca combine, abrevie ou invente termos fora da lista.
+R3. Conflito texto × lista → priorize a lista (valor mais próximo
+    semanticamente).
+R4. NUNCA extraia: "Código de barras", "EAN", "GTIN" ou "Motivo de GTIN
+    vazio". O sistema preenche a identificação automaticamente via API.
+R5. NUNCA invente valores sem base no texto, inferência lógica clara
+    ou conhecimento de mercado verificável.
 
 ====================================
 PADRONIZAÇÃO DE VALORES
 ====================================
-- Cores em português: "Preto", "Azul marinho", "Inox" (nunca "Black", "Navy")
-- Medidas com unidade e espaço: "500 ml", "15 cm", "2 kg"
-- Marcas: "Stanley", "Nike", "3M", "Tramontina"
-- Booleanos: "Sim", "Não" ou "A informar"
-- Voltagem: "110V", "220V", "Bivolt" ou "Não se aplica"
+- Idioma       : Português brasileiro.
+                 ✓ "Preto"  ✗ "Black" | ✓ "Azul marinho"  ✗ "Navy"
+- Medidas      : número + espaço + unidade → "500 ml", "15 cm", "2 kg"
+- Booleanos    : "Sim" ou "Não"
+- Voltagem     : "110V" | "220V" | "Bivolt" | "Não se aplica"
+- Marcas       : capitalização correta → "Stanley", "3M", "Tramontina"
+- Cores        : primeira letra maiúscula → "Preto", "Inox", "Chumbo"
+- Modelo       : preserve o código original (maiúsculas, hífens, pontos)
 
-Analise o produto e os campos solicitados.
-Responda EXCLUSIVAMENTE em JSON, sem texto adicional, sem markdown:
+====================================
+EXEMPLO COMPLETO
+====================================
+Campos Solicitados:
+  - Material [OBRIGATÓRIO]
+    (Valores Permitidos: "Inox", "Plástico", "Vidro", "Alumínio")
+  - Capacidade [OBRIGATÓRIO]
+  - Cor
+  - Voltagem
+  - Peso
+
+Texto de entrada:
+  "Garrafa Térmica Stanley Classic 1.0 Aço Inox 750ml Grafite ADVC-10"
+
+Saída esperada:
 {
   "atributos": {
-    "NOME_LIMPO_DO_CAMPO": "Valor Extraído"
+    "Modelo": "ADVC-10",
+    "Material": "Inox",
+    "Capacidade": "750 ml",
+    "Cor": "Grafite",
+    "Voltagem": "Não se aplica",
+    "Peso": "Não informado"
+  }
+}
+
+Notas do exemplo:
+- "Modelo" detectado pela estratégia A (código alfanumérico "ADVC-10").
+- "Material" veio da lista → sem sufixo.
+- "Cor" estava explícita → sem sufixo.
+- "Voltagem" preenchida por conhecimento de mercado (garrafa = sem
+  elétrica) → valor da lista, sem sufixo.
+- "Peso" ausente + [OBRIGATÓRIO] → "Não informado".
+- "Classic 1.0" ignorado no Modelo pois "ADVC-10" é mais específico
+  (estratégia A tem prioridade sobre B).
+
+====================================
+FORMATO DE SAÍDA
+====================================
+Responda EXCLUSIVAMENTE em JSON válido, sem texto adicional,
+sem markdown, sem comentários:
+{
+  "atributos": {
+    "Modelo": "...",
+    "NOME_EXATO_DO_CAMPO": "Valor Padronizado"
   }
 }"""
 
@@ -701,6 +819,65 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
         titulo = titulos_grade.get("1_classico") or formatar_title_case(nome_original)
         return titulo, titulos_grade
 
+    def _parse_descricao_json(self, res_copy: str) -> str:
+        """
+        Faz o parse robusto do JSON de descrição retornado pela IA.
+        Trata chaves faltantes, quebras de linha literais, aspas não escapadas e truncamento.
+        """
+        import json
+        import re
+
+        res_clean = res_copy.strip()
+
+        # 1. Tentativa padrão com json.loads
+        try:
+            data = json.loads(res_clean)
+            if isinstance(data, dict) and "descricao" in data:
+                return str(data["descricao"])
+        except Exception:
+            pass
+
+        # 2. Tentativa com strict=False (permite quebras de linha reais/caracteres de controle)
+        try:
+            data = json.loads(res_clean, strict=False)
+            if isinstance(data, dict) and "descricao" in data:
+                return str(data["descricao"])
+        except Exception:
+            pass
+
+        # 3. Extração via Regex (super robusta contra aspas/quebras/truncamento)
+        # Remove tags markdown do bloco json se houver
+        if res_clean.startswith("```"):
+            res_clean = re.sub(r'^```(?:json)?\n', '', res_clean)
+            res_clean = re.sub(r'\n```$', '', res_clean).strip()
+
+        # Procura a chave "descricao" ou "descriçao" ou "descrição"
+        match = re.search(r'"descri[cç]ao"\s*:\s*"(.*)', res_clean, re.DOTALL)
+        if match:
+            content = match.group(1).strip()
+            
+            # Limpa fechamentos do JSON no fim do conteúdo se existirem
+            if content.endswith('}'):
+                content = content[:-1].strip()
+            if content.endswith('"'):
+                content = content[:-1]
+                
+            # Substitui escapes comuns
+            content = content.replace('\\n', '\n')
+            content = content.replace('\\"', '"')
+            content = content.replace('\\\\', '\\')
+            return content.strip()
+
+        # 4. Fallback extremo: limpa o texto bruto se não encontrar chaves
+        fallback_text = res_clean
+        if fallback_text.startswith('{') and fallback_text.endswith('}'):
+            fallback_text = fallback_text[1:-1].strip()
+        if fallback_text.startswith('"') and fallback_text.endswith('"'):
+            fallback_text = fallback_text[1:-1].strip()
+            
+        fallback_text = fallback_text.replace('\\n', '\n').replace('\\"', '"')
+        return fallback_text.strip()
+
     def _gerar_descricao(self, titulo: str, contexto: str, descricao_atual: str) -> str:
         """
         Gera descrição via Gemini 1.5 Flash.
@@ -729,8 +906,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
                     feedback_erro = "A IA retornou vazio. Responda com o JSON completo."
                     continue
 
-                data_copy = json.loads(res_copy.strip())
-                desc_temp = data_copy.get("descricao", "")
+                desc_temp = self._parse_descricao_json(res_copy)
                 desc_temp = normalizar_descricao(desc_temp)
 
                 if validar_descricao(desc_temp):
@@ -963,7 +1139,7 @@ class CriadorKitsService:
 
         for k, v in atribs_ia.items():
             k_limpo = limpar_nome(k)
-            if v and v != "A informar" and v != "null":
+            if v and v != "null":
                 features[k_limpo] = v
 
         for n_prompt in lista_obrigatorios_nomes:
@@ -984,6 +1160,44 @@ class CriadorKitsService:
             if isinstance(chave, str) and chave.startswith("extra_field_"):
                 campos[chave] = valor
         campos["extra_field_39310"] = "un"
+        
+        # Força os campos obrigatórios na Ficha Técnica (Features)
+        if "features" in campos:
+            features_ref = campos["features"]
+            has_cond = False
+            has_fmt = False
+            for k in list(features_ref.keys()):
+                k_lower = k.lower()
+                if k_lower in ("condição do item", "item_condition"):
+                    features_ref[k] = "Novo"
+                    has_cond = True
+                if k_lower == "formato de venda":
+                    # No caso isolado, sem quantidade, usamos Unidade como padrão se nao encontrar
+                    features_ref[k] = "Unidade"
+                    has_fmt = True
+            
+            if not has_cond:
+                features_ref["Condição do item"] = "Novo"
+            if not has_fmt:
+                features_ref["Formato de venda"] = "Unidade"
+
+            # Garante que o Modelo nunca seja inválido, vazio ou use placeholders proibidos
+            has_modelo = False
+            base_sku = str(dados.get("sku") or sku_novo).strip()
+            for k in list(features_ref.keys()):
+                if "modelo" in k.lower() or "model" in k.lower():
+                    has_modelo = True
+                    v = str(features_ref[k]).strip()
+                    if not v or any(forbidden in v.lower() for forbidden in ["não informado", "a informar", "desconhecido", "n/a", "null", "preencher", "não se aplica", "nao se aplica"]):
+                        features_ref[k] = base_sku
+
+            if not has_modelo:
+                for n_p in lista_obrigatorios_nomes:
+                    n_limpo = re.sub(r'\s*\(Valores permitidos:.*?\)', '', n_p).strip()
+                    n_limpo = n_limpo.replace(" [OBRIGATÓRIO]", "").strip()
+                    if "modelo" in n_limpo.lower() or "model" in n_limpo.lower():
+                        features_ref[n_limpo] = base_sku
+
         return campos
 
     def _buscar_atributos_obrigatorios_ml(
@@ -992,7 +1206,10 @@ class CriadorKitsService:
         lista_obrigatorios_nomes = []
         termos_ignorar = [
             "motivo de gtin vazio", "reason_for_no_gtin", "motivo de gtin isento",
-            "código universal", "ean", "gtin", "código de barras"
+            "código universal", "ean", "gtin", "código de barras",
+            "autorização sanitária", "aviso de operação", "certificado da afe",
+            "licença do conama", "r.s/nso", "registro de producto do ms",
+            "cofepris", "rpptm", "registro/nso", "comunicação prévia na anvisa"
         ]
         
         if category_id_ml and category_id_ml != "979589":
@@ -1016,10 +1233,10 @@ class CriadorKitsService:
                         if valor_fisico:
                             features[n] = valor_fisico
                         else:
-                            campo_prompt = n
+                            campo_prompt = f"{n} [OBRIGATÓRIO]"
                             if allowed_values:
                                 vals_str = ", ".join(allowed_values[:10])
-                                campo_prompt = f"{n} (Valores permitidos: {vals_str})"
+                                campo_prompt = f"{n} [OBRIGATÓRIO] (Valores permitidos: {vals_str})"
                             lista_obrigatorios_nomes.append(campo_prompt)
 
                 logger.info(f"[Ficha Tecnica] Pendentes para IA: {len(lista_obrigatorios_nomes)}")
@@ -1103,6 +1320,27 @@ class CriadorKitsService:
                     pass
         return 0.0
 
+    def _obter_fallback_gpc_por_ncm(self, ncm: str) -> Optional[str]:
+        """
+        Retorna um GPC seguro e ativo baseado nos primeiros dígitos do NCM do produto.
+        Caso não mapeie, retorna None.
+        """
+        ncm_limpo = str(ncm).replace(".", "").strip()
+        
+        # Torneiras, registros, válvulas (NCM 8481...)
+        if ncm_limpo.startswith("8481"):
+            return "10002602"  # Torneiras / Misturadores
+            
+        # Cabos elétricos, fios, conectores (NCM 8544...)
+        if ncm_limpo.startswith("8544"):
+            return "10000586"  # Cabos / Conectores de Energia
+            
+        # Adesivos, colas, silicones, fitas autoadesivas (NCM 3506..., 3919...)
+        if ncm_limpo.startswith(("3506", "3919", "3214")):
+            return "10000624"  # Adesivos / Colas
+            
+        return None
+
     def _obter_ean_kit(
         self,
         sku_origem: str,
@@ -1131,8 +1369,43 @@ class CriadorKitsService:
             return obj.gtin
 
         try:
-            gpc = self._descobrir_gpc_via_ia(dados_completos)
-            logger.info(f"IA identificou GPC: {gpc} para {titulo_final}")
+            gpc = None
+            logger.info("Fluxo Blindado IA: Classificando GPC diretamente via IA (Groq)...")
+            
+            # Limpa o prefixo do Kit para obter o título do anúncio unitário correspondente
+            titulo_unitario = re.sub(r'^Kit\s+\d+\s+', '', titulo_final, flags=re.IGNORECASE).strip()
+            logger.info(f"Título específico para IA: '{titulo_unitario}' (extraído de '{titulo_final}')")
+            
+            try:
+                gpc_sugerido = self._descobrir_gpc_via_ia(dados_completos, titulo_especifico=titulo_unitario)
+                
+                # Validação estrita do GPC retornado pela IA
+                ncm_bruto = str(dados_completos.get("ncm", "00000000"))
+                ncm_limpo = ncm_bruto.replace(".", "").strip()
+                
+                if (
+                    gpc_sugerido 
+                    and gpc_sugerido.isdigit() 
+                    and len(gpc_sugerido) == 8 
+                    and not gpc_sugerido.endswith("09") 
+                    and gpc_sugerido != "10101502"
+                    and gpc_sugerido != ncm_limpo
+                ):
+                    gpc = gpc_sugerido
+                    logger.info(f"IA classificou GPC com sucesso: {gpc}")
+                else:
+                    logger.warning(f"GPC sugerido pela IA '{gpc_sugerido}' falhou na validação local.")
+            except Exception as e_ia:
+                logger.error(f"Erro durante classificação por IA: {e_ia}")
+
+            if not gpc:
+                logger.info("Ativando fallback inteligente por NCM para GPC...")
+                gpc = self._obter_fallback_gpc_por_ncm(dados_completos.get("ncm", ""))
+                logger.info(f"GPC determinado via fallback de NCM: {gpc}")
+
+            if not gpc:
+                raise Exception("GPC não pôde ser determinado e nenhum fallback NCM aplicável foi encontrado.")
+
 
             marca_real = dados_completos.get("marca")
             m_id = dados_completos.get("manufacturer_id")
@@ -1187,97 +1460,112 @@ class CriadorKitsService:
                 self._mapa_fabricantes_cache = {}
         return self._mapa_fabricantes_cache
 
-    def _descobrir_gpc_via_ia(self, dados: dict) -> str:
+    def _descobrir_gpc_via_ia(self, dados: dict, titulo_especifico: str = "") -> Optional[str]:
         """
-        Agente Classificador GPC: Llama 3.3 (Groq).
+        Agente Classificador GPC: Recorre à classificação via IA (Llama 3.3 / Groq).
         """
-        nome  = dados.get("nome") or (dados.get("text_fields", {}) or {}).get("name") or dados.get("name") or ""
+        nome  = titulo_especifico or dados.get("nome") or (dados.get("text_fields", {}) or {}).get("name") or dados.get("name") or ""
         ncm   = dados.get("ncm", "")
         marca = dados.get("marca", "")
 
-        prompt = f"""Você é um classificador GPC (Global Product Classification) da GS1.
-Sua única função é retornar o código Brick de 8 dígitos correto para o produto informado.
+        ncm_limpo = str(ncm).replace(".", "").strip()
+
+        # ── FALLBACK: CLASSIFICAÇÃO VIA IA (GROQ) ─────────────────────────────
+        logger.info(f"Chamando IA Groq para classificar GPC...")
+        
+        prompt = f"""Você é um classificador GPC (Global Product Classification) oficial da GS1.
+Sua única função é classificar o produto informado em seu código GPC Brick de 8 dígitos correto.
 
 ════════════════════════════════════════
 REGRA ABSOLUTA — NUNCA QUEBRE ESTA REGRA:
-Você JAMAIS deve pedir informações adicionais ao usuário.
-Você SEMPRE deve chegar a uma classificação final, mesmo com dados incompletos.
-Se houver ambiguidade, aplique as REGRAS DE DESEMPATE abaixo e decida.
+Você JAMAIS deve pedir informações adicionais ao usuário ou responder que não sabe/não pode classificar.
+Você SEMPRE deve decidir por um código Brick de 8 dígitos concreto na saída.
 ════════════════════════════════════════
 
-DADOS DO PRODUTO:
+Guia de Categorias e Bricks GPC oficiais e ativos (use de preferência para estes tipos de produto):
+1. Artigos de Papelaria e Escrita (lápis, ecolápis, canetas, marca-textos, canetinhas, blocos adesivos, borrachas):
+   - Use '10001234' (para Lápis) ou '10001235' (para Canetas) ou '10001229' (para outros artigos de escrita)
+2. Ferramentas Manuais (chaves combinadas, chaves de aperto, alicates, martelos):
+   - Use '10000424' (para Chaves de aperto) ou '10001859' (outras ferramentas manuais)
+3. Cremes e Cosméticos Corporal/Labial (hidratantes corporais, loções, protetor solar, hidratante labial/Carmed):
+   - Use '10000356'
+4. Perfumes e Fragrâncias (body splash, colônias, perfumes):
+   - Use '10000365'
+5. Sabonetes e Higiene Corporal (sabonetes em barra, sabonetes líquidos, géis de banho):
+   - Use '10000330'
+6. Cuidados e Estética Capilar (shampoo, condicionador, máscaras capilares):
+   - Use '10006987'
+7. Artigos para Bebê (chupetas, mordedores de bebê, mamadeiras, bicos):
+   - Use '10000504'
+8. Cabos, Fios, Adaptadores e Conectores Elétricos/Eletrônicos (cabos HDMI/VGA/RJ45, conversores, emendas, adaptadores):
+   - Use '10000586'
+9. Encanamento e Hidráulica (torneiras, misturadores, registros de banheiro/cozinha/jardim):
+   - Use '10002602'
+10. Adesivos, Colas e Fitas (colas instantâneas, silicones, fitas autoadesivas, fita isolante, veda rosca):
+    - Use '10000624'
+11. Utensílios Domésticos de Cozinha/Mesa (jogo americano, panelas, frigideiras, talheres):
+    - Use '10002152'
+12. Climatização (umidificador de ar, purificadores de ar):
+    - Use '10000120'
+13. Iluminação (lâmpadas de LED, luminárias, lâmpadas comuns):
+    - Use '10000552'
+14. Curativos e Primeiros Socorros (curativos adesivos, band-aids, gaze, fitas médicas):
+    - Use '10005844'
+
+Se o produto pertencer a uma categoria totalmente diferente de todas as 14 citadas, classifique-o no código GPC Brick correspondente correto de 8 dígitos, iniciando obrigatoriamente com o prefixo '1000' (garantindo que não termine em '09' e que não seja '10101502').
+
+DADOS DO PRODUTO A CLASSIFICAR:
 - Nome: {nome}
 - NCM: {ncm}
 - Marca: {marca}
 
-════════════════════════════════════════
-PROCESSO OBRIGATÓRIO (execute internamente, não exiba):
+FORMATO DE SAÍDA (exiba exatamente assim, sem nenhuma linha adicional):
 
-PASSO 1 — NATUREZA DO PRODUTO
-Identifique: o que é este produto? Para que serve?
-Use nome + NCM + marca como evidências combinadas.
-
-PASSO 2 — MAPEAMENTO NCM → SEGMENTO GPC
-Use o NCM para localizar o grande segmento GPC:
-- NCM 01–05 → Animais vivos / produtos de origem animal
-- NCM 06–15 → Produtos vegetais / óleos
-- NCM 16–24 → Alimentos e bebidas processados
-- NCM 25–27 → Minerais / combustíveis
-- NCM 28–38 → Produtos químicos / cosméticos / higiene
-- NCM 39–40 → Plásticos e borrachas
-- NCM 41–43 → Couros e peles
-- NCM 44–49 → Madeira / papel / embalagens
-- NCM 50–63 → Têxteis e vestuário
-- NCM 64–67 → Calçados e acessórios
-- NCM 68–70 → Minerais não metálicos / vidro
-- NCM 72–83 → Metais comuns
-- NCM 84–85 → Máquinas / eletroeletrônicos
-- NCM 86–89 → Veículos e embarcações
-- NCM 90–92 → Instrumentos / óptica / relógios
-- NCM 94–96 → Móveis / brinquedos / artigos diversos
-
-PASSO 3 — HIERARQUIA GPC
-Percorra obrigatoriamente:
-Segmento → Família → Classe → Brick
-Escolha sempre o Brick mais específico disponível.
-
-PASSO 4 — REGRAS DE DESEMPATE (aplique em ordem):
-R1. Se o NCM indicar claramente uma categoria, siga-o.
-R2. Se o nome contiver palavras-chave de uso final (ex: "infantil", "medicinal", "industrial"), priorize-as.
-R3. Se a marca for conhecida por atuar em uma categoria específica, use esse contexto.
-R4. Se ainda houver dúvida entre dois Bricks, escolha o mais genérico entre os candidatos.
-R5. NUNCA retorne vazio. Em último caso, classifique pelo NCM puro.
-
-════════════════════════════════════════
-FORMATO DE SAÍDA (exiba exatamente assim):
-
-Brick GPC   : [8 dígitos]
+Brick GPC   : [8 dígitos do Brick GPC correto]
 Segmento    : [nome do segmento]
 Família     : [nome da família]
 Classe      : [nome da classe]
 Brick       : [descrição do brick]
 Confiança   : [Alta / Média / Baixa]
-Justificativa: [1 a 3 frases explicando a escolha e qual regra de desempate foi usada, se aplicável]"""
+Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
 
         try:
             groq = GroqClient()
-            res = groq.chat(prompt, model="llama-3.3-70b-versatile")
+            res = groq.chat(
+                system_prompt=prompt,
+                user_input="Classifique o produto e retorne o Brick GPC no formato especificado.",
+                modelo="llama-3.3-70b-versatile"
+            )
             
-            # Extrair o primeiro número de 8 dígitos do resultado (o Brick GPC)
-            match = re.search(r'\b(\d{8})\b', res)
-            if match:
-                gpc = match.group(1)
-                if not gpc.endswith("09"):
+            # 1. Tentar extração usando padrão estruturado explicativo (case-insensitive)
+            # Ex: "Brick GPC   : 10002602" ou "GPC: 10002602"
+            match_estruturado = re.search(r'(?:brick\s+gpc|gpc|brick)\s*:\s*\b(\d{8})\b', res, re.IGNORECASE)
+            if match_estruturado:
+                gpc = match_estruturado.group(1)
+                # Verifica se não é igual ao NCM e se não termina com '09' (inativo/genérico) ou é o inativo '10101502'
+                if gpc != ncm_limpo and not gpc.endswith("09") and gpc != "10101502":
+                    logger.info(f"GPC extraído via padrão estruturado da IA: {gpc}")
                     return gpc
+
+            # 2. Fallback: procurar qualquer número de 8 dígitos que não seja o NCM do produto
+            todos_candidatos = re.findall(r'\b(\d{8})\b', res)
+            for cand in todos_candidatos:
+                if cand != ncm_limpo and not cand.endswith("09") and cand != "10101502":
+                    logger.info(f"GPC extraído via varredura de 8 dígitos da IA (filtrado): {cand}")
+                    return cand
             
-            logger.warning(f"GPC inválido sugerido ou formato incorreto. IA respondeu:\n{res}")
+            logger.warning(f"GPC válido não extraído do resultado. IA respondeu:\n{res}")
         except Exception as e:
             logger.error(f"Erro Groq GPC: {e}")
 
-        return "10005844"
+        return None
 
     def _resolver_campo_fisico(self, nome_campo: str, dados: Dict, quantidade: int = 1) -> Optional[str]:
         n = nome_campo.lower()
+
+        if "modelo" in n or "model" in n:
+            val = dados.get("sku") or dados.get("sku_origem")
+            return str(val).strip() if val else None
 
         if "marca" == n or "fabricante" == n:
             m_id = dados.get("manufacturer_id")
@@ -1531,12 +1819,43 @@ Justificativa: [1 a 3 frases explicando a escolha e qual regra de desempate foi 
 
             # Atualiza features por variação
             features_var = features_base.copy()
+            has_cond = False
+            has_fmt = False
+            
             for k in list(features_var.keys()):
                 k_lower = k.lower()
                 if ean_final and ("código universal" in k_lower or "ean" in k_lower):
                     features_var[k] = ean_final
                 if "unidades por kit" in k_lower or "unidades por embalagem" in k_lower:
                     features_var[k] = str(anuncio.quantidade)
+                if k_lower in ("condição do item", "item_condition"):
+                    features_var[k] = "Novo"
+                    has_cond = True
+                if k_lower == "formato de venda":
+                    features_var[k] = "Unidade" if anuncio.quantidade == 1 else "Kit"
+                    has_fmt = True
+
+            if not has_cond:
+                features_var["Condição do item"] = "Novo"
+            if not has_fmt:
+                features_var["Formato de venda"] = "Unidade" if anuncio.quantidade == 1 else "Kit"
+
+            # Garante que o Modelo nunca seja inválido, vazio ou use placeholders proibidos
+            has_modelo = False
+            base_sku = str(dados.get("sku") or sku_origem).strip()
+            for k in list(features_var.keys()):
+                if "modelo" in k.lower() or "model" in k.lower():
+                    has_modelo = True
+                    v = str(features_var[k]).strip()
+                    if not v or any(forbidden in v.lower() for forbidden in ["não informado", "a informar", "desconhecido", "n/a", "null", "preencher", "não se aplica", "nao se aplica"]):
+                        features_var[k] = base_sku
+
+            if not has_modelo:
+                for n_p in lista_obrigatorios:
+                    n_limpo = re.sub(r'\s*\(Valores permitidos:.*?\)', '', n_p).strip()
+                    n_limpo = n_limpo.replace(" [OBRIGATÓRIO]", "").strip()
+                    if "modelo" in n_limpo.lower() or "model" in n_limpo.lower():
+                        features_var[n_limpo] = base_sku
 
             payload = {
                 "inventory_id":    self.ID_INVENTARIO,

@@ -197,8 +197,8 @@ class Produto(models.Model):
 
     @property
     def pronto_para_ean(self) -> bool:
-        """True se pode ir para o GeradorEANService: tem dados fiscais e ainda não tem EAN."""
-        return self.tem_dados_fiscais and not self.tem_ean
+        """True se pode ir para o GeradorEANService: tem todos os dados fiscais obrigatórios."""
+        return self.tem_dados_fiscais
 
     @property
     def tem_custo(self) -> bool:

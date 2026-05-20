@@ -292,27 +292,41 @@ Para `quantidade > 1`:
 1. Verifica se já existe EAN em `GtinKit` para o par `(sku_origem, quantidade)`
 2. Se existir e não for `PENDENTE` → reaproveita
 3. Se não existir:
-   - Descobre GPC via `_descobrir_gpc_via_ia()`
-   - Resolve marca real via mapa de fabricantes
-   - Chama `gs1_client.gerar_ean_completo()`
-   - Salva o GTIN no banco
-4. **Fallback UUID:** se a GS1 falhar, gera GTIN determinístico via `uuid5` com seed `kit-{sku}-{qtd}`
+   - Extrai o título específico do anúncio unitário (removendo prefixo "Kit N").
+   - Tenta descobrir o GPC via `_descobrir_gpc_via_ia()`.
+   - Se falhar, tenta o fallback local via NCM (através de `_obter_fallback_gpc_por_ncm()`).
+   - Se ainda assim não determinar o GPC, levanta uma exceção de segurança que é capturada pelo bloco `except`.
+   - Resolve a marca real do produto via mapa de fabricantes do BaseLinker.
+   - Chama `gs1_client.gerar_ean_completo()`.
+   - Salva o GTIN oficial gerado no banco.
+4. **Geração Segura de Mock GTIN (Captura de Falha):** Se o processo da GS1 falhar por qualquer motivo (GPC indeterminado, erro de timeout ou limites de rate limit), gera um GTIN mock determinístico baseado em UUIDv5 a partir da seed `kit-{sku_origem}-{quantidade}`, iniciado com o dígito `1`. Isso evita travar o fluxo principal da aplicação ou enviar dados incorretos à GS1.
 
-#### `_descobrir_gpc_via_ia(dados) -> str`
-Usa Groq (Llama 3.3 70B) para classificar o produto no GPC (Global Product Classification) de 8 dígitos.
+#### `_descobrir_gpc_via_ia(dados, titulo_especifico="") -> Optional[str]`
+Usa Groq (Llama 3.3 70B) para classificar o produto no GPC (Global Product Classification) de 8 dígitos usando o título do anúncio unitário e o NCM.
 
-**Regras:**
-- Retorna apenas 8 dígitos numéricos
-- Rejeita códigos terminados em `09` (a GS1 Brasil rejeita)
-- Fallback: `"10005844"` (Higiene/Limpeza Pet)
+**Regras de Classificação:**
+- Retorna apenas 8 dígitos numéricos.
+- Rejeita códigos terminados em `09` (inativos/genéricos da GS1) ou o código inativo `10101502`.
+- Não aceita códigos idênticos ao NCM do produto.
+- Em caso de falha ou impossibilidade de classificar, retorna `None` (ativando o fallback por NCM).
 
-**Base de conhecimento hardcoded:**
-- Higiene/Limpeza Pet → `10005844`
-- Ração Cães → `10000104`
-- Ração Gatos → `10000105`
-- Antiparasitários → `10005845`
-- Brinquedos Pet → `10000570`
-- Coleiras/Acessórios → `10005691`
+**Base de Conhecimento Estruturada no Prompt:**
+O prompt da IA possui uma taxonomia de 14 categorias de produtos bem definidas com seus respectivos Bricks GPC válidos e ativos:
+1. **Artigos de Papelaria e Escrita:** `10001234` (Lápis), `10001235` (Canetas), `10001229` (Outros).
+2. **Ferramentas Manuais:** `10000424` (Chaves de Aperto), `10001859` (Outras).
+3. **Cremes e Cosméticos Corporal/Labial:** `10000356`.
+4. **Perfumes e Fragrâncias (Body Splash/Colônias):** `10000365`.
+5. **Sabonetes e Higiene Corporal:** `10000330`.
+6. **Cuidados e Estética Capilar (Shampoo/Condicionador):** `10006987`.
+7. **Artigos para Bebê (Chupetas/Mordedores):** `10000504`.
+8. **Cabos, Fios, Adaptadores e Conectores:** `10000586`.
+9. **Encanamento e Hidráulica (Torneiras/Registros):** `10002602`.
+10. **Adesivos, Colas e Fitas:** `10000624`.
+11. **Utensílios Domésticos de Cozinha/Mesa:** `10002152`.
+12. **Climatização (Umidificadores):** `10000120`.
+13. **Iluminação (Lâmpadas/Luminárias):** `10000552`.
+14. **Curativos e Primeiros Socorros:** `10005844`.
+
 
 ---
 

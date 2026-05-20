@@ -321,6 +321,75 @@ class GS1Client:
         except Exception as e:
             return {"sucesso": False, "erro": f"Falha de comunicação GS1: {e}"}
 
+    def consultar_produto(self, gtin: str) -> dict:
+        """
+        Consulta um produto no Cadastro Nacional de Produtos (CNP) da GS1 pelo GTIN.
+        """
+        session = self._session()
+        
+        # Garante GTIN de 14 dígitos (zeros à esquerda)
+        gtin_14 = str(gtin).strip().zfill(14)
+        url = f"{self.BASE_URL}/gs1/v2/products/{gtin_14}"
+        
+        logger.info("GS1 consultando produto | GTIN=%s", gtin_14)
+        try:
+            response = session.get(url, timeout=self.TIMEOUT)
+            logger.debug("GS1 consulta status: %s | body: %s", response.status_code, response.text[:800])
+            
+            if response.status_code == 200:
+                return {"sucesso": True, "dados": response.json()}
+            
+            return {
+                "sucesso": False,
+                "erro": f"GS1 retornou status {response.status_code}: {response.text[:500]}"
+            }
+        except Exception as e:
+            return {"sucesso": False, "erro": f"Erro de comunicação com a GS1: {e}"}
+
+    @staticmethod
+    def _extrair_gpc(data: dict) -> Optional[str]:
+        """
+        Tenta encontrar o código GPC (gpcCategoryCode) na resposta da GS1 de forma recursiva.
+        """
+        # Tentativa 1: na raiz do tradeItemClassification
+        classification = data.get("tradeItemClassification") or {}
+        gpc = classification.get("gpcCategoryCode")
+        if gpc:
+            return str(gpc).strip()
+
+        # Tentativa 2: dentro de tradeItem -> tradeItemClassification
+        trade_item = data.get("tradeItem") or {}
+        classification = trade_item.get("tradeItemClassification") or {}
+        gpc = classification.get("gpcCategoryCode")
+        if gpc:
+            return str(gpc).strip()
+
+        # Tentativa 3: dentro de product -> tradeItemClassification
+        product = data.get("product") or {}
+        classification = product.get("tradeItemClassification") or {}
+        gpc = classification.get("gpcCategoryCode")
+        if gpc:
+            return str(gpc).strip()
+
+        # Tentativa 4: varredura recursiva procurando chave "gpcCategoryCode"
+        def _buscar_gpc(obj):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if k.lower() == "gpccategorycode" and v:
+                        return str(v).strip()
+                    result = _buscar_gpc(v)
+                    if result:
+                        return result
+            elif isinstance(obj, list):
+                for item in obj:
+                    result = _buscar_gpc(item)
+                    if result:
+                        return result
+            return None
+
+        return _buscar_gpc(data)
+
+
 
 # ---------------------------------------------------------------------------
 # Singleton — uma única instância por processo.
