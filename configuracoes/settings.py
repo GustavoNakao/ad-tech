@@ -7,7 +7,6 @@ from decouple import config, Csv
 import dj_database_url
 from decouple import config
 
-BASELINK_TOKEN = config('BASELINKER_TOKEN')
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -114,12 +113,12 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'   # importante para produção
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ====================== LOGGING (SKU Kits) ======================
+# ====================== LOGGING ======================
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'gerador_kits': {
+        'padrao': {
             'format': '[%(asctime)s] %(levelname)s %(name)s %(message)s',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
@@ -127,27 +126,14 @@ LOGGING = {
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'gerador_kits',
+            'formatter': 'padrao',
         },
     },
     'loggers': {
-        'gerador_kits': {'level': 'INFO', 'handlers': ['console']},
-        'gerador_kits.metrics': {'level': 'INFO', 'handlers': ['console']},
-    },
-}
-
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-        },
-    },
-    "loggers": {
-        "integracoes": {
-            "handlers": ["console"],
-            "level": "DEBUG",
-        },
+        # Logs do módulo de criação de kits
+        'gerador_kits':         {'level': 'INFO',  'handlers': ['console'], 'propagate': False},
+        'gerador_kits.metrics': {'level': 'INFO',  'handlers': ['console'], 'propagate': False},
+        # Logs de todas as integrações externas (BaseLinker, ML, GS1, Gemini, Groq)
+        'integracoes':          {'level': 'DEBUG', 'handlers': ['console'], 'propagate': False},
     },
 }
