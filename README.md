@@ -121,18 +121,18 @@ Remove lixo antes de `SOBRE O PRODUTO`, garantindo que a descrição sempre inic
 
 ## Classe `SEOGenerator`
 
-Orquestrador de agentes de IA especializados. Usa **Gemini 1.5 Flash** para Compliance, Títulos e Descrição, e **Groq (Llama)** para Ficha Técnica e Keywords.
+Orquestrador de agentes de IA especializados. Usa **Gemini 2.5 Flash** para Compliance, Títulos e Descrição, e **Groq (Llama)** para Ficha Técnica e Keywords.
 
 ### Agentes de IA
 
 | Agente | Modelo | Função |
 |---|---|---|
-| **Agente 1 — Compliance** | Gemini 1.5 Flash | Verifica se o produto pode ser anunciado no ML |
-| **Agente 2A — Título Unitário** | Gemini 1.5 Flash | Gera 1 título otimizado (55–60 chars) |
-| **Agente 2B — Grade de Títulos** | Gemini 1.5 Flash | Gera 8 títulos base (t1_a→t4_b) |
+| **Agente 1 — Compliance** | Gemini 2.5 Flash | Verifica se o produto pode ser anunciado no ML |
+| **Agente 2A — Título Unitário** | Gemini 2.5 Flash | Gera 1 título otimizado (55–60 chars) |
+| **Agente 2B — Grade de Títulos** | Gemini 2.5 Flash | Gera 8 títulos base (t1_a→t4_b) |
 | **Agente 4 — Ficha Técnica** | Groq Llama 3.3 70B | Extrai/infere atributos técnicos |
 | **Agente 5 — Keywords** | Groq Llama 3.1 8B | Gera lista de palavras-chave SEO |
-| **Agente 6 — Descrição** | Gemini 1.5 Flash | Cria descrição completa com 5 seções |
+| **Agente 6 — Descrição** | Gemini 2.5 Flash | Cria descrição completa com 5 seções |
 
 ### Regras do Agente 1 — Compliance
 Bloqueia produtos nas categorias: Financeiro, Digital/Software, Segurança/Saúde, Propriedade Intelectual, Não-Produto, Adulto, Animais/Meio Ambiente.

@@ -38,16 +38,17 @@ Registra cada kit criado com sucesso.
 | `criado_em` | DateTimeField | Auto preenchido na criação |
 
 ### `GtinKit`
-Persistência de GTINs gerados na GS1 Brasil. Garante que o mesmo par (produto + quantidade) sempre use o mesmo GTIN entre Clássico e Premium.
+Persistência de GTINs gerados na GS1 Brasil. Mapeia e rastreia o GTIN gerado individualmente por SKU final de kit (`sku_kit`).
 
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `sku_origem` | CharField(60) | SKU do produto base |
+| `sku_kit` | CharField(60) | SKU único do kit gerado (Indexado) |
 | `quantidade` | IntegerField | Quantidade do kit (2, 3 ou 4) |
-| `gtin` | CharField(20) | EAN gerado (único) |
+| `gtin` | CharField(20) | EAN gerado (compartilhado por Clássico/Premium no mesmo lote) |
 | `criado_em` | DateTimeField | Auto preenchido |
 
-**Regra:** `unique_together = ['sku_origem', 'quantidade']` — um GTIN por combinação.
+**Regra de Unicidade:** O modelo indexa individualmente por `sku_kit` (a restrição `unique_together` de `sku_origem` e `quantidade` foi removida para permitir que lotes de grade criados em momentos diferentes gerem novos GTINs independentes para o mesmo produto base).
 
 ### `NumeroReciclado`
 Tabela de SKUs que falharam durante a criação e devem ser reaproveitados na próxima tentativa.
@@ -112,18 +113,18 @@ Remove lixo antes de `SOBRE O PRODUTO`, garantindo que a descrição sempre inic
 
 ## Classe `SEOGenerator`
 
-Orquestrador de agentes de IA especializados. Usa **Gemini 1.5 Flash** para Compliance, Títulos e Descrição, e **Groq (Llama)** para Ficha Técnica e Keywords.
+Orquestrador de agentes de IA especializados. Usa **Gemini 2.5 Flash** para Compliance, Títulos e Descrição, e **Groq (Llama)** para Ficha Técnica e Keywords.
 
 ### Agentes de IA
 
 | Agente | Modelo | Função |
 |---|---|---|
-| **Agente 1 — Compliance** | Gemini 1.5 Flash | Verifica se o produto pode ser anunciado no ML |
-| **Agente 2A — Título Unitário** | Gemini 1.5 Flash | Gera 1 título otimizado (55–60 chars) |
-| **Agente 2B — Grade de Títulos** | Gemini 1.5 Flash | Gera 8 títulos base (t1_a→t4_b) |
+| **Agente 1 — Compliance** | Gemini 2.5 Flash | Verifica se o produto pode ser anunciado no ML |
+| **Agente 2A — Título Unitário** | Gemini 2.5 Flash | Gera 1 título otimizado (55–60 chars) |
+| **Agente 2B — Grade de Títulos** | Gemini 2.5 Flash | Gera 8 títulos base (t1_a→t4_b) |
 | **Agente 4 — Ficha Técnica** | Groq Llama 3.3 70B | Extrai/infere atributos técnicos |
 | **Agente 5 — Keywords** | Groq Llama 3.1 8B | Gera lista de palavras-chave SEO |
-| **Agente 6 — Descrição** | Gemini 1.5 Flash | Cria descrição completa com 5 seções |
+| **Agente 6 — Descrição** | Gemini 2.5 Flash | Cria descrição completa com 5 seções |
 
 ### Regras do Agente 1 — Compliance
 Bloqueia produtos nas categorias: Financeiro, Digital/Software, Segurança/Saúde, Propriedade Intelectual, Não-Produto, Adulto, Animais/Meio Ambiente.
@@ -288,9 +289,10 @@ Resolve campos de ficha técnica a partir dos dados físicos do produto sem prec
 #### `_obter_ean_kit(sku_origem, quantidade, dados_completos, sku_kit_final, titulo_final, forcar_unitario=False) -> str`
 **Regra:** kits com `quantidade <= 1` não geram novo EAN (retorna `""`), **exceto** se `forcar_unitario` for `True`.
 
-Para `quantidade > 1`:
-1. Verifica se já existe EAN em `GtinKit` para o par `(sku_origem, quantidade)`
-2. Se existir e não for `PENDENTE` → reaproveita
+Para `quantidade > 1` (Orquestração de Lote e Unicidade):
+1. **Cache de Lote (Execução):** No método `executar_criacao_grade`, mantemos um cache local em memória (`self.gtins_gerados_lote: Dict[int, str]`). Se a quantidade já teve um EAN gerado nesta execução (ex: Clássico já gerou para Qtd 2), a outra modalidade (ex: Premium) herda esse EAN em memória e registra a entrada histórica no banco local individualmente para o seu `sku_kit`.
+2. **Nova Consulta/Geração:** Se a quantidade ainda não está no cache de lote (ex: primeira variação de Qtd 2 sendo criada, ou uma execução de grade diferente/lote novo), o método `_obter_ean_kit` é acionado para obter ou gerar o EAN.
+3. **Persistência Local:** O método consulta e persiste em `GtinKit` usando `sku_kit=sku_kit_final` como chave de busca, garantindo reaproveitamento caso este SKU específico do kit já tenha sido registrado anteriormente.
 3. Se não existir:
    - Extrai o título específico do anúncio unitário (removendo prefixo "Kit N").
    - Tenta descobrir o GPC via `_descobrir_gpc_via_ia()`.
@@ -423,7 +425,7 @@ executar_criacao_grade(
     c. Limpeza agressiva do título: remove Kit, Unidade, Unitário, Premium, Clássico, Pack, Original
     d. Adicionar prefixo "Kit N" para quantidade > 1
     e. ajustar_titulo() — padding/corte para 55–60 chars
-    f. Determinar tag (classico/premium)
+    f. Determinar tag principal (classico/premium) e injetar tag "Marketplace" se Qtd == 1
     g. Montar payload completo
     h. _enviar_para_baselinker() → obter id_kit
     i. _salvar_historico()
@@ -514,6 +516,9 @@ Banco PostgreSQL → get_next_kit_sku()
 **Regras de EAN por variação:**
 - Quantidade 1 → usa EAN do produto base (**ou gera novo se `gerar_ean_unitario` for True**)
 - Quantidade > 1 → gera novo EAN na GS1, compartilhado entre Clássico e Premium do mesmo nível
+
+**Tags Especiais:**
+- Quantidade 1 → Recebe adicionalmente a tag `Marketplace` no BaseLinker para distinção visual.
 
 **Peso por variação:** `peso_base × quantidade` (+ peso_secundario × quantidade se Kit Misto)
 

@@ -125,11 +125,11 @@ def normalizar_descricao(desc: str) -> str:
 class SEOGenerator:
     """
     Orquestrador de Agentes Especializados para SEO e Compliance.
-    Usa Gemini 1.5 Flash para Compliance, Títulos e Descrição.
+    Usa Gemini 2.5 Flash para Compliance, Títulos e Descrição.
     Usa Llama 3.1/3.3 (Groq) para Ficha Técnica e Keywords.
 
     MUDANÇAS v2.1:
-    - Alterado Títulos e Descrição para Gemini 1.5 Flash (Google AI Studio).
+    - Alterado Títulos e Descrição para Gemini 2.5 Flash (Google AI Studio).
     - Temperatura 0.0 em todas as chamadas de geração.
     - Validação de caracteres feita 100% em Python.
     - Descrição usa template fixo com marcadores.
@@ -655,8 +655,8 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
         else:
             titulo, titulos_grade = self._gerar_titulo_unitario(contexto, nome_original)
 
-        # --- AGENTE 6: DESCRIÇÃO (Gemini 1.5 Flash) ---
-        logger.info("[Agente 3] Gerando Descrição Copywriter (Gemini 1.5 Flash)...")
+        # --- AGENTE 6: DESCRIÇÃO (Gemini 2.5 Flash) ---
+        logger.info("[Agente 3] Gerando Descrição Copywriter (Gemini 2.5 Flash)...")
         desc = self._gerar_descricao(titulo, contexto, descricao_atual)
 
         # --- AGENTE 4: FICHA TÉCNICA (Groq) ---
@@ -689,7 +689,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
 
     def _gerar_titulo_unitario(self, contexto: str, nome_original: str):
         """
-        Gera um título unitário via Gemini 1.5 Flash.
+        Gera um título unitário via Gemini 2.5 Flash.
         A validação de caracteres é feita 100% em Python.
         """
         import json
@@ -743,7 +743,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
 
     def _gerar_grade_titulos(self, contexto: str, nome_original: str):
         """
-        Gera a grade de 8 títulos via Gemini 1.5 Flash.
+        Gera a grade de 8 títulos via Gemini 2.5 Flash.
         A IA gera apenas a base otimizada. O Python mapeia e finaliza.
         """
         import json
@@ -880,7 +880,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
 
     def _gerar_descricao(self, titulo: str, contexto: str, descricao_atual: str) -> str:
         """
-        Gera descrição via Gemini 1.5 Flash.
+        Gera descrição via Gemini 2.5 Flash.
         Valida presença das 5 seções obrigatórias antes de aceitar.
         """
         import json
@@ -1359,13 +1359,16 @@ class CriadorKitsService:
             return ""
 
         obj, created = GtinKit.objects.get_or_create(
-            sku_origem=sku_origem,
-            quantidade=quantidade,
-            defaults={'gtin': 'PENDENTE'},
+            sku_kit=sku_kit_final,
+            defaults={
+                'sku_origem': sku_origem,
+                'quantidade': quantidade,
+                'gtin': 'PENDENTE',
+            },
         )
 
         if not created and obj.gtin and obj.gtin != 'PENDENTE':
-            logger.info(f"Reaproveitando EAN {obj.gtin} para {sku_origem} Qtd {quantidade}")
+            logger.info(f"Reaproveitando EAN {obj.gtin} para SKU Kit {sku_kit_final}")
             return obj.gtin
 
         try:
@@ -1668,6 +1671,9 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
         Cria a grade completa de 8 anúncios (1/2/3/4un x Clássico/Premium) no BaseLinker.
         """
         logger.warning(f"Iniciando criação de GRADE (8 anúncios) -> SKU Origem={sku_origem} | EAN Unitário={gerar_ean_unitario}")
+        
+        # Inicializa o cache local de execução para compartilhar EANs entre Clássico e Premium
+        self.gtins_gerados_lote: Dict[int, str] = {}
 
         dados = self._baixar_dados_produto(pid)
         if not dados:
@@ -1813,6 +1819,14 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
             else:
                 logger.warning(f"Tag '{tag_name}' não encontrada no BaseLinker.")
 
+            # Se for um anúncio unitário (Qtd = 1), adiciona também a tag "Marketplace"
+            if anuncio.quantidade == 1:
+                tag_marketplace = mapa_tags.get("marketplace")
+                if tag_marketplace:
+                    tags_enviar.append(tag_marketplace)
+                else:
+                    logger.warning("Tag 'Marketplace' não encontrada no BaseLinker.")
+
             ean_final = ""
             if anuncio.quantidade == 1 and not gerar_ean_unitario:
                 ean_final = dados.get("ean", "")
@@ -1894,10 +1908,26 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
 
                 if anuncio.quantidade > 1 or (anuncio.quantidade == 1 and gerar_ean_unitario):
                     time.sleep(2)
-                    ean_final = self._obter_ean_kit(
-                        sku_origem, anuncio.quantidade, dados, sku_novo, 
-                        titulo_final, forcar_unitario=(anuncio.quantidade == 1 and gerar_ean_unitario)
-                    )
+                    # Verifica se o EAN para esta quantidade já foi gerado na execução deste lote/grade
+                    if anuncio.quantidade in self.gtins_gerados_lote:
+                        ean_final = self.gtins_gerados_lote[anuncio.quantidade]
+                        logger.info(f"Herdando EAN {ean_final} do cache de lote para SKU Kit {sku_novo} (Qtd {anuncio.quantidade})")
+                        # Cria o registro individual da variação no banco local apontando para o EAN herdado
+                        GtinKit.objects.get_or_create(
+                            sku_kit=sku_novo,
+                            defaults={
+                                'sku_origem': sku_origem,
+                                'quantidade': anuncio.quantidade,
+                                'gtin': ean_final,
+                            }
+                        )
+                    else:
+                        ean_final = self._obter_ean_kit(
+                            sku_origem, anuncio.quantidade, dados, sku_novo, 
+                            titulo_final, forcar_unitario=(anuncio.quantidade == 1 and gerar_ean_unitario)
+                        )
+                        if ean_final and ean_final != 'PENDENTE':
+                            self.gtins_gerados_lote[anuncio.quantidade] = ean_final
 
                 if ean_final and (anuncio.quantidade > 1 or gerar_ean_unitario):
                     for k in list(features_var.keys()):
