@@ -346,6 +346,47 @@ class GS1Client:
         except Exception as e:
             return {"sucesso": False, "erro": f"Erro de comunicação com a GS1: {e}"}
 
+    def inativar_ou_excluir_produto(self, gtin: str) -> dict:
+        """
+        Tenta inativar ou excluir um GTIN no Cadastro Nacional de Produtos (CNP) da GS1.
+        Tenta primeiro enviar uma chamada DELETE para remoção física imediata. Se falhar,
+        realiza o fallback para PATCH definindo o status como INACTIVE.
+        """
+        session = self._session()
+        gtin_14 = str(gtin).strip().zfill(14)
+        url = f"{self.BASE_URL}/gs1/v2/products/{gtin_14}"
+
+        logger.warning(f"GS1 tentando inativar/excluir GTIN={gtin_14}")
+        
+        # Estratégia 1: Tenta remover via DELETE
+        try:
+            resp_del = session.delete(url, timeout=self.TIMEOUT)
+            logger.info(f"GS1 DELETE status={resp_del.status_code} | body={resp_del.text[:300]}")
+            if resp_del.status_code in [200, 204]:
+                return {"sucesso": True, "msg": f"GTIN {gtin} excluído com sucesso da GS1 via DELETE."}
+        except Exception as e:
+            logger.error(f"GS1 falha no DELETE do GTIN {gtin}: {e}")
+
+        # Estratégia 2: Fallback para PATCH definindo status como INACTIVE
+        payload = {
+            "gtinStatusCode": "INACTIVE",
+            "acceptResponsibility": True
+        }
+        try:
+            resp_patch = session.patch(url, json=payload, timeout=self.TIMEOUT)
+            logger.info(f"GS1 PATCH status={resp_patch.status_code} | body={resp_patch.text[:300]}")
+            if resp_patch.status_code in [200, 204, 201]:
+                return {"sucesso": True, "msg": f"GTIN {gtin} inativado com sucesso na GS1 via PATCH."}
+            
+            try:
+                body = resp_patch.json()
+            except Exception:
+                body = {}
+            erro_msg = body.get("message") or resp_patch.text
+            return {"sucesso": False, "erro": f"GS1 rejeitou atualização para INACTIVE: {erro_msg}"}
+        except Exception as e:
+            return {"sucesso": False, "erro": f"Falha ao tentar inativar GTIN {gtin} na GS1: {e}"}
+
     @staticmethod
     def _extrair_gpc(data: dict) -> Optional[str]:
         """

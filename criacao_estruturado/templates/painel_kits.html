@@ -192,6 +192,48 @@
         .sc { display:inline-flex; align-items:center; gap:4px; background:var(--surface2); border:1px solid var(--border2); border-radius:5px; padding:2px 8px; font-size:11px; }
         .sc.kit { border-color:rgba(0,200,255,.22); color:var(--cyan); background:var(--cyan-dim); }
 
+        .btn-action-view {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 200, 255, 0.2);
+            background: rgba(0, 200, 255, 0.05);
+            color: #00c8ff;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 11px;
+            text-decoration: none;
+        }
+        .btn-action-view:hover {
+            background: rgba(0, 200, 255, 0.18) !important;
+            border-color: #00c8ff !important;
+            color: #00e5ff !important;
+            transform: scale(1.05);
+        }
+        .btn-action-delete {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 77, 109, 0.2);
+            background: rgba(255, 77, 109, 0.05);
+            color: var(--danger);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 11px;
+        }
+        .btn-action-delete:hover {
+            background: rgba(255, 77, 109, 0.18) !important;
+            border-color: var(--danger) !important;
+            color: #ff3355 !important;
+            transform: scale(1.05);
+        }
+
         @keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         @keyframes si{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
         @keyframes fadein{from{opacity:0}to{opacity:1}}
@@ -297,6 +339,30 @@
                                    placeholder="https://www.mercadolivre.com.br/..." autocomplete="off" value="{{ analise.url_produto_ml|default:'' }}">
                         </div>
 
+                        <div class="fg">
+                            <label class="fl" style="display:flex;align-items:center;gap:5px;">
+                                <i class="fa-solid fa-barcode" style="color:#00c8ff;"></i>
+                                Código GPC (Global Product Classification)
+                                <span style="font-size:9px;color:#3a4a5c;margin-left:4px;">(opcional — autocompleta se mapeado)</span>
+                            </label>
+                            <input type="text" name="gpc_manual" id="gpc-inp" class="fi" maxlength="8" pattern="\d{8}"
+                                   placeholder="Ex: 10002602" autocomplete="off" value="{{ analise.gpc_manual|default:'' }}">
+                            
+                            {% if analise %}
+                                {% if analise.gpc_sugerido %}
+                                    <div style="font-size:11px; margin-top:6px; display:flex; align-items:center; gap:5px; color:var(--success);">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                        <span>GPC auto-sugerido com base no NCM: <b>{{ analise.gpc_sugerido }}</b></span>
+                                    </div>
+                                {% else %}
+                                    <div style="font-size:11px; margin-top:6px; display:flex; align-items:center; gap:5px; color:var(--warn);">
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                        <span>NCM inédito. Insira o GPC de 8 dígitos para mapear de forma permanente.</span>
+                                    </div>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+
                         <!-- Toggle Kit Misto -->
                         <label class="toggle-misto">
                             <input type="checkbox" id="chk-misto" {% if analise.e_misto %}checked{% endif %}>
@@ -334,6 +400,29 @@
                         <div class="ai-row"><i class="fa-solid fa-weight-hanging" style="color:var(--success)"></i><span class="truncate-title">Peso cubado vs real (MAX)</span><span class="at ta">Engine v2</span></div>
                         <div class="ai-row"><i class="fa-solid fa-truck" style="color:var(--warn)"></i><span class="truncate-title">Frete com desconto MercadoLíder 50%</span><span class="at tw">Engine v2</span></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- DESFAZER CRIAÇÃO (ROLLBACK) -->
+            <div class="card" style="animation-delay:.22s; border-color: rgba(255, 77, 109, 0.2); margin-top: 16px;">
+                <div class="ch">
+                    <h2 style="color: var(--danger);"><i class="fa-solid fa-rotate-left" style="color: var(--danger);"></i> Desfazer Criação de Grade (Rollback)</h2>
+                    <span class="chip" style="background: rgba(255, 77, 109, 0.1); color: var(--danger); border-color: rgba(255, 77, 109, 0.2);">Perigo</span>
+                </div>
+                <div class="cb">
+                    <p style="font-size: 11px; color: var(--muted); margin-bottom: 12px;">
+                        Criou uma grade errada? Digite o <b>SKU de Origem</b> (base) abaixo. O sistema excluirá todos os anúncios criados no BaseLinker para este SKU de origem, removerá os históricos de criação locais e apagará os EANs gerados no banco local para que possam ser gerados novamente.
+                    </p>
+                    <form method="POST" onsubmit="return confirmarRollback(event)">
+                        {% csrf_token %}
+                        <input type="hidden" name="acao" value="rollback">
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" name="sku_rollback" id="sku-rollback" class="fi" style="flex: 1;" placeholder="Ex: 30565" required autocomplete="off">
+                            <button type="submit" class="btn-criar" style="background: linear-gradient(135deg, var(--danger), #c32d46); color: white; width: auto; padding: 0 20px; border-radius: 9px; font-weight: bold; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-trash-can"></i> Desfazer Grade
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
 
@@ -458,6 +547,7 @@
                                 <input type="hidden" name="sku_secundario" value="{{ analise.sku_secundario }}">
                                 <input type="hidden" name="category_id_ml" value="{{ analise.category_id_ml }}">
                                 <input type="hidden" name="gerar_ean_unitario" value="{% if analise.gerar_ean_unitario %}on{% endif %}">
+                                <input type="hidden" name="gpc_manual" value="{{ analise.gpc_manual|default:'' }}">
                             </form>
                             
                             {% if analise.status == 'vermelho' %}
@@ -500,7 +590,7 @@
             <thead>
                 <tr>
                     <th>Kit</th>
-                    <th style="text-align:center;">Ver</th>
+                    <th style="text-align:center;">Ações</th>
                     <th class="text-right">Criado em</th>
                 </tr>
             </thead>
@@ -514,8 +604,21 @@
                         </div>
                     </td>
                     <td style="text-align:center;">
-                        <a href="https://panel-u.baselinker.com/inventory_bundles#product:{{ kit.id_kit }}#tab:general"
-                           target="_blank" class="sc" style="text-decoration:none; color:#00c8ff; border-color: rgba(0,200,255,0.2);"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                        <div style="display:flex; justify-content:center; align-items:center; gap:8px;">
+                            <a href="https://panel-u.baselinker.com/inventory_bundles#product:{{ kit.id_kit }}#tab:general"
+                               target="_blank" class="btn-action-view" title="Ver no BaseLinker">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </a>
+                            <form method="POST" style="margin:0; display:inline;" onsubmit="return confirmarExclusaoIndividual(event, '{{ kit.sku_kit }}')">
+                                {% csrf_token %}
+                                <input type="hidden" name="acao" value="excluir_individual">
+                                <input type="hidden" name="id_kit" value="{{ kit.id_kit }}">
+                                <input type="hidden" name="sku_kit" value="{{ kit.sku_kit }}">
+                                <button type="submit" class="btn-action-delete" title="Excluir produto e liberar SKU">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </form>
+                        </div>
                     </td>
                     <td class="text-right" style="font-size:11px; color:var(--muted);">{{ kit.criado_em|date:"d/m H:i" }}</td>
                 </tr>
@@ -528,6 +631,23 @@
             <p>Nenhum kit criado ainda.</p>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- OVERLAY DE LOADING DA CRIAÇÃO (COM SUPORTE A CANCELAMENTO/PARADA E EXCLUSÃO GS1) -->
+<div class="offcanvas-overlay" id="loadingOverlay" style="z-index: 9999; display:none; flex-direction:column; justify-content:center; align-items:center; gap:20px; background:rgba(5,8,16,0.92);">
+    <div style="background: var(--surface); border: 1px solid var(--border); padding: 35px 30px; border-radius: 14px; width: 90%; max-width: 440px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.7); animation: fu 0.4s ease-out;">
+        <div class="spinner" style="width: 45px; height: 45px; border-width: 3px; border-top-color: var(--cyan); margin: 0 auto 24px auto;"></div>
+        <h3 style="font-family: var(--fh); font-size: 19px; color: var(--text); margin-bottom: 10px; font-weight: 800;">Criando Grade de Anúncios</h3>
+        <p style="font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.6;">
+            O sistema está gerando os 8 anúncios no BaseLinker e registrando os EANs/GTINs oficiais na GS1 Brasil de forma resiliente. Este processo pode levar até 30 segundos.
+        </p>
+        <button id="btn-cancelar-criacao" type="button" class="sc btn-action-delete" style="padding: 10px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; height: 38px; width: 100%;">
+            <i class="fa-solid fa-circle-stop" style="font-size: 14px;"></i> Parar Criação e Excluir GTINs
+        </button>
+        <div id="cancel-status" style="display:none; font-size:11px; color:#ff778b; margin-top:12px; font-weight:600; text-align:center; animation: si 0.3s ease;">
+            <i class="fa-solid fa-spinner fa-spin"></i> Solicitando cancelamento e limpando GS1...
+        </div>
     </div>
 </div>
 
@@ -558,15 +678,56 @@ document.getElementById('form-analisar').addEventListener('submit', function(e) 
     }
 });
 
-// Loading no botão de Confirmação (Criar Kit)
+// Exibição do Modal de Loading Premium com suporte a Interrupção e Exclusão na GS1
 const formCriacao = document.getElementById('form-criacao');
 if (formCriacao) {
     formCriacao.addEventListener('submit', function(e) {
-        const btn = document.getElementById('btn-confirmar');
-        if(btn) {
-            btn.disabled = true; // Prevenção de duplo clique
-            btn.classList.add('loading');
-            btn.innerHTML = '<div class="spinner"></div> Processando...';
+        // Exibe o Overlay de Loading
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.style.display = 'flex';
+            overlay.style.opacity = '1';
+        }
+
+        // Configura o clique no botão de interrupção
+        const btnCancelar = document.getElementById('btn-cancelar-criacao');
+        const statusCancel = document.getElementById('cancel-status');
+        
+        if (btnCancelar) {
+            btnCancelar.addEventListener('click', function() {
+                if (confirm("🛑 DESEJA REALMENTE INTERROMPER A CRIAÇÃO AGORA?\n\nEsta ação:\n1. Parará a criação dos próximos anúncios da grade imediatamente;\n2. Excluirá fisicamente todos os anúncios deste lote já cadastrados no BaseLinker;\n3. Excluirá/inativará permanentemente na GS1 Brasil todos os novos GTINs (EANs) gerados até aqui.\n\nConfirmar interrupção e limpeza na GS1?")) {
+                    btnCancelar.disabled = true;
+                    btnCancelar.style.opacity = '0.5';
+                    btnCancelar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Interrompendo...';
+                    if (statusCancel) {
+                        statusCancel.style.display = 'block';
+                    }
+
+                    // Extrai o SKU de Origem do formulário (sku_manual no form-criacao)
+                    const skuOrigemInput = formCriacao.querySelector('input[name="sku_manual"]');
+                    const skuOrigem = skuOrigemInput ? skuOrigemInput.value.trim() : '';
+
+                    if (skuOrigem) {
+                        // Dispara o cancelamento via AJAX fetch POST para a mesma URL
+                        const formData = new FormData();
+                        formData.append('csrfmiddlewaretoken', formCriacao.querySelector('input[name="csrfmiddlewaretoken"]').value);
+                        formData.append('acao', 'cancelar_lote');
+                        formData.append('sku_origem', skuOrigem);
+
+                        fetch(window.location.href, {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(resp => resp.json())
+                        .then(data => {
+                            console.log("Pedido de cancelamento computado no servidor:", data);
+                        })
+                        .catch(err => {
+                            console.error("Falha ao enviar requisição de cancelamento:", err);
+                        });
+                    }
+                }
+            });
         }
     });
 }
@@ -584,6 +745,38 @@ document.querySelectorAll('.alert').forEach(function(a) {
 function toggleHistory() {
     document.getElementById('historyDrawer').classList.toggle('open');
     document.getElementById('historyOverlay').classList.toggle('open');
+}
+
+// Confirmação para desfazer grade (Rollback)
+function confirmarRollback(e) {
+    const sku = document.getElementById('sku-rollback').value.trim();
+    if (!sku) return false;
+    const confirmacao = confirm(`⚠️ ATENÇÃO: OPERAÇÃO CRÍTICA! ⚠️\n\nVocê está prestes a desinstalar e DELETAR TODOS os anúncios da grade criada para o SKU de Origem: ${sku}.\n\nIsso irá:\n1. Remover todos os anúncios filhos no BaseLinker;\n2. Limpar os registros locais de EAN (GtinKit);\n3. Liberar e reciclar os SKUs para novas criações.\n\nDeseja prosseguir? Esta ação NÃO pode ser desfeita.`);
+    if (!confirmacao) {
+        e.preventDefault();
+        return false;
+    }
+    const btn = e.target.querySelector('button[type="submit"]');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spinner" style="border-top-color:#fff;"></div> Processando...';
+    }
+    return true;
+}
+
+// Confirmação para exclusão individual de kit
+function confirmarExclusaoIndividual(e, sku) {
+    const confirmacao = confirm(`⚠️ EXCLUSÃO DE ANÚNCIO INDIVIDUAL ⚠️\n\nTem certeza de que deseja deletar o Kit de SKU ${sku} do BaseLinker?\n\nIsso removerá o anúncio no BaseLinker, apagará o registro no histórico do painel e removerá o EAN (GTIN) local associado.\n\nDeseja confirmar a exclusão?`);
+    if (!confirmacao) {
+        e.preventDefault();
+        return false;
+    }
+    const btn = e.target.querySelector('button[type="submit"]');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    }
+    return true;
 }
 </script>
 </body>

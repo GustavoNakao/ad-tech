@@ -21,6 +21,7 @@ from integracoes.groq import GroqClient
 from ..models.historico_kit import HistoricoKit
 from ..models.gtin_kit import GtinKit
 from ..models.numero_reciclado import NumeroReciclado
+from ..models.ncm_gpc import NcmGpc
 from precificacao.services.calculadora import Calculadora
 from precificacao.models import RegrasPrecificacao
 from categorias.models.termos_proibidos import TermosProibidos
@@ -103,19 +104,54 @@ def formatar_title_case(titulo: str) -> str:
     return " ".join(resultado)
 
 
+def normalizar_texto_validador(texto: str) -> str:
+    """
+    Normaliza o texto para comparações robustas e flexíveis de cabeçalhos de seção:
+    - Transforma em caixa baixa
+    - Remove marcas de markdown (*, #, :, -, _, etc.)
+    - Remove acentos/diacríticos
+    - Normaliza múltiplos espaços
+    """
+    import unicodedata
+    import re
+    texto = (texto or "").lower()
+    # Remove marcas de markdown e pontuações de título
+    texto = re.sub(r'[*#:\-_]', ' ', texto)
+    # Remove acentos
+    texto_norm = unicodedata.normalize('NFD', texto)
+    texto_sem_acentos = "".join(c for c in texto_norm if unicodedata.category(c) != 'Mn')
+    return " ".join(texto_sem_acentos.split())
+
+
+# Versões normalizadas das seções para comparação resiliente
+SECOES_OBRIGATORIAS_NORM = {
+    "SOBRE O PRODUTO": "sobre o produto",
+    "BENEFÍCIOS": "beneficios",
+    "DIFERENCIAIS DO PRODUTO": "diferenciais do produto",
+    "DÚVIDAS FREQUENTES": "duvidas frequentes",
+    "IDEAL PARA": "ideal para",
+}
+
+
 def validar_descricao(desc: str) -> bool:
-    """Verifica se todas as seções obrigatórias estão presentes na descrição."""
-    return all(secao in desc for secao in SECOES_OBRIGATORIAS)
+    """Verifica se todas as seções obrigatórias estão presentes na descrição de forma robusta e flexível."""
+    desc_norm = normalizar_texto_validador(desc)
+    return all(norm_val in desc_norm for norm_val in SECOES_OBRIGATORIAS_NORM.values())
 
 
 def normalizar_descricao(desc: str) -> str:
     """
     Garante que a descrição sempre comece pela seção correta,
     removendo qualquer lixo antes de 'SOBRE O PRODUTO'.
+    Suporta variações de caixa e marcas de markdown.
     """
-    if "SOBRE O PRODUTO" in desc:
-        desc = "SOBRE O PRODUTO\n" + desc.split("SOBRE O PRODUTO", 1)[1].strip()
-    return desc.strip()
+    desc_strip = desc.strip()
+    # Procura 'SOBRE O PRODUTO' de forma case-insensitive e flexível em relação a markdown/espaços/pontuações
+    match = re.search(r'(?:[#*]*\s*)?(sobre\s+o\s+produto)(?:\s*[#*:]*)?', desc_strip, re.IGNORECASE)
+    if match:
+        idx = match.start()
+        return desc_strip[idx:].strip()
+    return desc_strip
 
 
 # =============================================================================
@@ -914,7 +950,8 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
                     logger.info(f"Descrição aprovada ({len(desc)} chars) na tentativa {tentativa + 1}.")
                     break
                 else:
-                    secoes_faltando = [s for s in SECOES_OBRIGATORIAS if s not in desc_temp]
+                    desc_norm = normalizar_texto_validador(desc_temp)
+                    secoes_faltando = [s for s in SECOES_OBRIGATORIAS if SECOES_OBRIGATORIAS_NORM[s] not in desc_norm]
                     logger.warning(f"Tentativa {tentativa + 1}: seções ausentes: {secoes_faltando}")
                     feedback_erro = f"Faltaram as seções obrigatórias: {secoes_faltando}"
                     if tentativa == max_tentativas - 1:
@@ -1349,6 +1386,7 @@ class CriadorKitsService:
         sku_kit_final: str,
         titulo_final: str,
         forcar_unitario: bool = False,
+        gpc_manual: Optional[str] = None,
     ) -> str:
         """
         Obtém ou gera um EAN para o kit.
@@ -1357,6 +1395,27 @@ class CriadorKitsService:
         """
         if quantidade <= 1 and not forcar_unitario:
             return ""
+
+        # Busca inteligente por quantidade no banco de dados local para compartilhamento de EAN
+        gtin_existente = GtinKit.objects.filter(
+            sku_origem=sku_origem,
+            quantidade=quantidade
+        ).exclude(gtin='PENDENTE').exclude(gtin='').first()
+
+        if gtin_existente:
+            logger.info(f"Reaproveitando EAN {gtin_existente.gtin} da variação {gtin_existente.sku_kit} para a quantidade {quantidade}")
+            obj, created = GtinKit.objects.get_or_create(
+                sku_kit=sku_kit_final,
+                defaults={
+                    'sku_origem': sku_origem,
+                    'quantidade': quantidade,
+                    'gtin': gtin_existente.gtin,
+                },
+            )
+            if not created and obj.gtin != gtin_existente.gtin:
+                obj.gtin = gtin_existente.gtin
+                obj.save()
+            return gtin_existente.gtin
 
         obj, created = GtinKit.objects.get_or_create(
             sku_kit=sku_kit_final,
@@ -1373,42 +1432,50 @@ class CriadorKitsService:
 
         try:
             gpc = None
-            logger.info("Fluxo Blindado IA: Classificando GPC diretamente via IA (Groq)...")
-            
-            # Limpa o prefixo do Kit para obter o título do anúncio unitário correspondente
-            titulo_unitario = re.sub(r'^Kit\s+\d+\s+', '', titulo_final, flags=re.IGNORECASE).strip()
-            logger.info(f"Título específico para IA: '{titulo_unitario}' (extraído de '{titulo_final}')")
-            
-            try:
-                gpc_sugerido = self._descobrir_gpc_via_ia(dados_completos, titulo_especifico=titulo_unitario)
-                
-                # Validação estrita do GPC retornado pela IA
-                ncm_bruto = str(dados_completos.get("ncm", "00000000"))
-                ncm_limpo = ncm_bruto.replace(".", "").strip()
-                
-                if (
-                    gpc_sugerido 
-                    and gpc_sugerido.isdigit() 
-                    and len(gpc_sugerido) == 8 
-                    and not gpc_sugerido.endswith("09") 
-                    and gpc_sugerido != "10101502"
-                    and gpc_sugerido != ncm_limpo
-                ):
-                    gpc = gpc_sugerido
-                    logger.info(f"IA classificou GPC com sucesso: {gpc}")
+            ncm_bruto = str(dados_completos.get("ncm", "00000000"))
+            ncm_limpo = ncm_bruto.replace(".", "").strip()
+
+            # 1. Se foi enviado GPC manual e for válido (8 dígitos numéricos)
+            if gpc_manual:
+                gpc_manual_limpo = str(gpc_manual).strip()
+                if gpc_manual_limpo.isdigit() and len(gpc_manual_limpo) == 8:
+                    gpc = gpc_manual_limpo
+                    logger.info(f"GPC manual fornecido pelo painel: {gpc}")
+                    
+                    # Salva/Atualiza o mapeamento NCM -> GPC local de forma permanente
+                    if ncm_limpo:
+                        NcmGpc.objects.update_or_create(
+                            ncm=ncm_limpo,
+                            defaults={"gpc": gpc}
+                        )
+                        logger.info(f"Mapeamento permanente criado/atualizado: NCM {ncm_limpo} -> GPC {gpc}")
                 else:
-                    logger.warning(f"GPC sugerido pela IA '{gpc_sugerido}' falhou na validação local.")
-            except Exception as e_ia:
-                logger.error(f"Erro durante classificação por IA: {e_ia}")
+                    logger.warning(f"GPC manual fornecido '{gpc_manual}' é inválido (deve ter 8 dígitos numéricos).")
+
+            # 2. Se não foi fornecido GPC manual ou se ele é inválido, tenta obter do banco de dados local (NcmGpc)
+            if not gpc and ncm_limpo:
+                mapeamento = NcmGpc.objects.filter(ncm=ncm_limpo).first()
+                if mapeamento:
+                    gpc = mapeamento.gpc
+                    logger.info(f"GPC obtido do mapeamento local no banco: NCM {ncm_limpo} -> GPC {gpc}")
+
+            # 3. Se ainda assim não encontrar, tenta obter do fallback estático de NCM
+            if not gpc and ncm_limpo:
+                logger.info("Buscando GPC no fallback estático por NCM...")
+                gpc_fallback = self._obter_fallback_gpc_por_ncm(ncm_limpo)
+                if gpc_fallback:
+                    gpc = gpc_fallback
+                    logger.info(f"GPC determinado via fallback estático de NCM: {gpc}")
+                    
+                    # Salva no banco de dados local o mapeamento estático para persistência definitiva
+                    NcmGpc.objects.update_or_create(
+                        ncm=ncm_limpo,
+                        defaults={"gpc": gpc}
+                    )
+                    logger.info(f"Mapeamento de fallback estático persistido no banco: NCM {ncm_limpo} -> GPC {gpc}")
 
             if not gpc:
-                logger.info("Ativando fallback inteligente por NCM para GPC...")
-                gpc = self._obter_fallback_gpc_por_ncm(dados_completos.get("ncm", ""))
-                logger.info(f"GPC determinado via fallback de NCM: {gpc}")
-
-            if not gpc:
-                raise Exception("GPC não pôde ser determinado e nenhum fallback NCM aplicável foi encontrado.")
-
+                raise Exception("GPC não pôde ser determinado (nenhum mapeamento NCM cadastrado e nenhum fallback aplicável encontrado).")
 
             marca_real = dados_completos.get("marca")
             m_id = dados_completos.get("manufacturer_id")
@@ -1442,12 +1509,25 @@ class CriadorKitsService:
         except Exception as e:
             import traceback
             logger.error(f"Falha crítica no processo GS1: {e}")
-            seed = f'kit-{sku_origem}-{quantidade}'
-            hash_val = int(uuid.uuid5(uuid.NAMESPACE_DNS, seed).int % 999999999999)
-            novo_gtin = f'1{hash_val:012d}'
-            obj.gtin = novo_gtin
+            
+            # Se for unitário (Qtd = 1), tenta usar o EAN original do produto base se for válido
+            if quantidade == 1:
+                ean_original = str(dados_completos.get("ean") or "").strip()
+                # Verifica se é um EAN brasileiro legítimo ou qualquer EAN válido (mínimo de 12 dígitos)
+                if ean_original and len(ean_original) >= 12 and ean_original.lower() != "pendente":
+                    logger.warning(f"GS1 falhou para unitário. Utilizando EAN original como fallback: {ean_original}")
+                    obj.gtin = ean_original
+                    obj.save()
+                    return ean_original
+
+            # Se não puder usar o original ou se for kit (Qtd > 1):
+            # Para evitar rejeições duras nos marketplaces por EAN/GTIN inválido (ex: iniciado com '1'),
+            # salvamos como 'PENDENTE' no banco local e retornamos vazio ("") para que o produto seja publicado sem EAN,
+            # permitindo que o anúncio vá ao ar e o usuário possa corrigir o EAN posteriormente.
+            logger.warning(f"GS1 falhou para kit/unitário (Qtd={quantidade}). Retornando vazio para evitar GTIN inválido.")
+            obj.gtin = "PENDENTE"
             obj.save()
-            return novo_gtin
+            return ""
 
     def _get_mapa_fabricantes(self) -> Dict[int, str]:
         if self._mapa_fabricantes_cache is None:
@@ -1462,106 +1542,6 @@ class CriadorKitsService:
                 logger.error(f"Erro ao carregar fabricantes: {exc}")
                 self._mapa_fabricantes_cache = {}
         return self._mapa_fabricantes_cache
-
-    def _descobrir_gpc_via_ia(self, dados: dict, titulo_especifico: str = "") -> Optional[str]:
-        """
-        Agente Classificador GPC: Recorre à classificação via IA (Llama 3.3 / Groq).
-        """
-        nome  = titulo_especifico or dados.get("nome") or (dados.get("text_fields", {}) or {}).get("name") or dados.get("name") or ""
-        ncm   = dados.get("ncm", "")
-        marca = dados.get("marca", "")
-
-        ncm_limpo = str(ncm).replace(".", "").strip()
-
-        # ── FALLBACK: CLASSIFICAÇÃO VIA IA (GROQ) ─────────────────────────────
-        logger.info(f"Chamando IA Groq para classificar GPC...")
-        
-        prompt = f"""Você é um classificador GPC (Global Product Classification) oficial da GS1.
-Sua única função é classificar o produto informado em seu código GPC Brick de 8 dígitos correto.
-
-════════════════════════════════════════
-REGRA ABSOLUTA — NUNCA QUEBRE ESTA REGRA:
-Você JAMAIS deve pedir informações adicionais ao usuário ou responder que não sabe/não pode classificar.
-Você SEMPRE deve decidir por um código Brick de 8 dígitos concreto na saída.
-════════════════════════════════════════
-
-Guia de Categorias e Bricks GPC oficiais e ativos (use de preferência para estes tipos de produto):
-1. Artigos de Papelaria e Escrita (lápis, ecolápis, canetas, marca-textos, canetinhas, blocos adesivos, borrachas):
-   - Use '10001234' (para Lápis) ou '10001235' (para Canetas) ou '10001229' (para outros artigos de escrita)
-2. Ferramentas Manuais (chaves combinadas, chaves de aperto, alicates, martelos):
-   - Use '10000424' (para Chaves de aperto) ou '10001859' (outras ferramentas manuais)
-3. Cremes e Cosméticos Corporal/Labial (hidratantes corporais, loções, protetor solar, hidratante labial/Carmed):
-   - Use '10000356'
-4. Perfumes e Fragrâncias (body splash, colônias, perfumes):
-   - Use '10000365'
-5. Sabonetes e Higiene Corporal (sabonetes em barra, sabonetes líquidos, géis de banho):
-   - Use '10000330'
-6. Cuidados e Estética Capilar (shampoo, condicionador, máscaras capilares):
-   - Use '10006987'
-7. Artigos para Bebê (chupetas, mordedores de bebê, mamadeiras, bicos):
-   - Use '10000504'
-8. Cabos, Fios, Adaptadores e Conectores Elétricos/Eletrônicos (cabos HDMI/VGA/RJ45, conversores, emendas, adaptadores):
-   - Use '10000586'
-9. Encanamento e Hidráulica (torneiras, misturadores, registros de banheiro/cozinha/jardim):
-   - Use '10002602'
-10. Adesivos, Colas e Fitas (colas instantâneas, silicones, fitas autoadesivas, fita isolante, veda rosca):
-    - Use '10000624'
-11. Utensílios Domésticos de Cozinha/Mesa (jogo americano, panelas, frigideiras, talheres):
-    - Use '10002152'
-12. Climatização (umidificador de ar, purificadores de ar):
-    - Use '10000120'
-13. Iluminação (lâmpadas de LED, luminárias, lâmpadas comuns):
-    - Use '10000552'
-14. Curativos e Primeiros Socorros (curativos adesivos, band-aids, gaze, fitas médicas):
-    - Use '10005844'
-
-Se o produto pertencer a uma categoria totalmente diferente de todas as 14 citadas, classifique-o no código GPC Brick correspondente correto de 8 dígitos, iniciando obrigatoriamente com o prefixo '1000' (garantindo que não termine em '09' e que não seja '10101502').
-
-DADOS DO PRODUTO A CLASSIFICAR:
-- Nome: {nome}
-- NCM: {ncm}
-- Marca: {marca}
-
-FORMATO DE SAÍDA (exiba exatamente assim, sem nenhuma linha adicional):
-
-Brick GPC   : [8 dígitos do Brick GPC correto]
-Segmento    : [nome do segmento]
-Família     : [nome da família]
-Classe      : [nome da classe]
-Brick       : [descrição do brick]
-Confiança   : [Alta / Média / Baixa]
-Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
-
-        try:
-            groq = GroqClient()
-            res = groq.chat(
-                system_prompt=prompt,
-                user_input="Classifique o produto e retorne o Brick GPC no formato especificado.",
-                modelo="llama-3.3-70b-versatile"
-            )
-            
-            # 1. Tentar extração usando padrão estruturado explicativo (case-insensitive)
-            # Ex: "Brick GPC   : 10002602" ou "GPC: 10002602"
-            match_estruturado = re.search(r'(?:brick\s+gpc|gpc|brick)\s*:\s*\b(\d{8})\b', res, re.IGNORECASE)
-            if match_estruturado:
-                gpc = match_estruturado.group(1)
-                # Verifica se não é igual ao NCM e se não termina com '09' (inativo/genérico) ou é o inativo '10101502'
-                if gpc != ncm_limpo and not gpc.endswith("09") and gpc != "10101502":
-                    logger.info(f"GPC extraído via padrão estruturado da IA: {gpc}")
-                    return gpc
-
-            # 2. Fallback: procurar qualquer número de 8 dígitos que não seja o NCM do produto
-            todos_candidatos = re.findall(r'\b(\d{8})\b', res)
-            for cand in todos_candidatos:
-                if cand != ncm_limpo and not cand.endswith("09") and cand != "10101502":
-                    logger.info(f"GPC extraído via varredura de 8 dígitos da IA (filtrado): {cand}")
-                    return cand
-            
-            logger.warning(f"GPC válido não extraído do resultado. IA respondeu:\n{res}")
-        except Exception as e:
-            logger.error(f"Erro Groq GPC: {e}")
-
-        return None
 
     def _resolver_campo_fisico(self, nome_campo: str, dados: Dict, quantidade: int = 1) -> Optional[str]:
         n = nome_campo.lower()
@@ -1621,11 +1601,16 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
             erros.append(f"título inválido ou ausente (gerado: {titulo!r})")
 
         desc = (conteudo.get("descricao") or "").strip()
-        secoes_minimas = ["SOBRE O PRODUTO", "BENEFÍCIOS"]
+        desc_norm = normalizar_texto_validador(desc)
+        secoes_minimas_norm = ["sobre o produto", "beneficios"]
         if not desc or len(desc) < 100:
             erros.append(f"descrição inválida ou ausente (tamanho: {len(desc)} chars)")
-        elif not any(s in desc for s in secoes_minimas):
-            erros.append("descrição não contém as seções obrigatórias (SOBRE O PRODUTO, BENEFÍCIOS)")
+        elif not any(s in desc_norm for s in secoes_minimas_norm):
+            # Se possuir um tamanho mínimo bom (>150 chars), prosseguimos com warning no log em vez de abortar duramente
+            if len(desc) < 150:
+                erros.append("descrição não contém as seções obrigatórias (SOBRE O PRODUTO, BENEFÍCIOS)")
+            else:
+                logger.warning("Descrição não contém as seções mínimas exigidas de forma clara, mas possui tamanho aceitável. Prosseguindo para evitar falha fatal no kit.")
 
         if erros:
             msg = f"Falha na geração de conteúdo pela IA: {'; '.join(erros)}. Criação abortada para não gerar anúncio sem texto."
@@ -1666,6 +1651,7 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
         sku_secundario: Optional[str] = None,
         category_id_ml: Optional[str] = None,
         gerar_ean_unitario: bool = False,
+        gpc_manual: Optional[str] = None,
     ) -> Dict:
         """
         Cria a grade completa de 8 anúncios (1/2/3/4un x Clássico/Premium) no BaseLinker.
@@ -1674,6 +1660,10 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
         
         # Inicializa o cache local de execução para compartilhar EANs entre Clássico e Premium
         self.gtins_gerados_lote: Dict[int, str] = {}
+
+        # Registra o início de execução do lote no cache para controle de cancelamento em tempo real
+        from django.core.cache import cache
+        cache.set(f"criacao_lote_{sku_origem}", "executando", timeout=120)
 
         dados = self._baixar_dados_produto(pid)
         if not dados:
@@ -1766,6 +1756,11 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
             if str(k).startswith("extra_field_") and k not in campos_base:
                 campos_base[k] = v
 
+        # Identifica se o produto base tem um EAN legítimo cadastrado no BaseLinker
+        ean_original = str(dados.get("ean") or "").strip()
+        ean_base_valido = bool(ean_original and ean_original.lower() != "pendente")
+        precisa_gerar_unitario = gerar_ean_unitario or not ean_base_valido
+
         skus_criados = []
         ids_criados  = []
 
@@ -1773,6 +1768,18 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
             if anuncio.bloqueado:
                 logger.warning(f"Ignorando {anuncio.referencia}: Bloqueado.")
                 continue
+
+            # Verifica se o lote foi voluntariamente cancelado pelo usuário
+            from django.core.cache import cache
+            status_lote = cache.get(f"criacao_lote_{sku_origem}")
+            if status_lote == "cancelado":
+                logger.warning(f"Lote do SKU {sku_origem} foi voluntariamente CANCELADO pelo usuário durante o processamento.")
+                # Executa o rollback completo de tudo que já foi criado até agora neste lote, inclusive na GS1
+                self.executar_rollback_grade(sku_origem)
+                return {
+                    "sucesso": False,
+                    "msg": f"Criação interrompida com sucesso. Todos os anúncios criados até o momento para o SKU {sku_origem} foram removidos e os GTINs correspondentes foram inativados/excluídos na GS1."
+                }
 
             sku_novo = self._obter_proximo_sku(None)
             if not sku_novo:
@@ -1819,8 +1826,8 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
             else:
                 logger.warning(f"Tag '{tag_name}' não encontrada no BaseLinker.")
 
-            # Se for um anúncio unitário (Qtd = 1), adiciona também a tag "Marketplace"
-            if anuncio.quantidade == 1:
+            # Se for um anúncio unitário clássico (Qtd = 1 e modalidade = classico), adiciona também a tag "Marketplace"
+            if anuncio.quantidade == 1 and anuncio.modalidade == "classico":
                 tag_marketplace = mapa_tags.get("marketplace")
                 if tag_marketplace:
                     tags_enviar.append(tag_marketplace)
@@ -1828,7 +1835,7 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
                     logger.warning("Tag 'Marketplace' não encontrada no BaseLinker.")
 
             ean_final = ""
-            if anuncio.quantidade == 1 and not gerar_ean_unitario:
+            if anuncio.quantidade == 1 and not precisa_gerar_unitario:
                 ean_final = dados.get("ean", "")
 
             # Atualiza features por variação
@@ -1906,7 +1913,7 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
                 skus_criados.append(sku_novo)
                 ids_criados.append(id_kit)
 
-                if anuncio.quantidade > 1 or (anuncio.quantidade == 1 and gerar_ean_unitario):
+                if anuncio.quantidade > 1 or (anuncio.quantidade == 1 and precisa_gerar_unitario):
                     time.sleep(2)
                     # Verifica se o EAN para esta quantidade já foi gerado na execução deste lote/grade
                     if anuncio.quantidade in self.gtins_gerados_lote:
@@ -1924,12 +1931,13 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
                     else:
                         ean_final = self._obter_ean_kit(
                             sku_origem, anuncio.quantidade, dados, sku_novo, 
-                            titulo_final, forcar_unitario=(anuncio.quantidade == 1 and gerar_ean_unitario)
+                            titulo_final, forcar_unitario=(anuncio.quantidade == 1 and precisa_gerar_unitario),
+                            gpc_manual=gpc_manual,
                         )
                         if ean_final and ean_final != 'PENDENTE':
                             self.gtins_gerados_lote[anuncio.quantidade] = ean_final
 
-                if ean_final and (anuncio.quantidade > 1 or gerar_ean_unitario):
+                if ean_final and (anuncio.quantidade > 1 or precisa_gerar_unitario):
                     for k in list(features_var.keys()):
                         if "código universal" in k.lower() or "ean" in k.lower():
                             features_var[k] = ean_final
@@ -2190,3 +2198,118 @@ Justificativa: [1 a 3 frases explicando o motivo da escolha]"""
                 )
         except Exception as exc:
             logger.warning(f"Reciclar {sku}: {exc}")
+
+    def executar_rollback_grade(self, sku_origem: str) -> Dict:
+        """
+        Deleta os produtos criados na grade (a partir de HistoricoKit),
+        limpa os GTINs locais associados e recicla os SKUs utilizados.
+        """
+        logger.warning(f"Iniciando ROLLBACK completo para SKU Origem={sku_origem}")
+        historicos = HistoricoKit.objects.filter(sku_origem=sku_origem)
+        
+        if not historicos.exists():
+            return {
+                "sucesso": False,
+                "msg": f"Nenhum kit no histórico encontrado para o SKU de origem {sku_origem}."
+            }
+
+        deletados_bl = 0
+        skus_reciclados = []
+        erros = []
+
+        for h in historicos:
+            try:
+                # Deleta o produto do BaseLinker
+                resp_del = self.client._request("deleteInventoryProduct", {
+                    "inventory_id": self.ID_INVENTARIO,
+                    "product_id": int(h.id_kit),
+                })
+                if resp_del.get("status") == "SUCCESS":
+                    deletados_bl += 1
+                else:
+                    erros.append(f"Erro ao deletar ID {h.id_kit} no BaseLinker: {resp_del.get('error_message')}")
+            except Exception as e:
+                erros.append(f"Falha ao deletar ID {h.id_kit} no BaseLinker: {e}")
+
+            # Recicla o SKU
+            self._reciclar_numero(h.sku_kit)
+            skus_reciclados.append(h.sku_kit)
+
+        # Inativa os GTINs gerados para este lote na API da GS1 Brasil antes de apagar registros
+        from integracoes.gs1.client import get_gs1_client
+        gs1 = get_gs1_client()
+        gtins = GtinKit.objects.filter(sku_origem=sku_origem).exclude(gtin='PENDENTE').exclude(gtin='').values_list('gtin', flat=True).distinct()
+        for g in gtins:
+            try:
+                logger.warning(f"Chamando inativação GS1 para o GTIN {g} devido ao Rollback.")
+                gs1.inativar_ou_excluir_produto(g)
+            except Exception as e:
+                logger.error(f"Erro ao inativar GTIN {g} na GS1 durante rollback: {e}")
+
+        # Deleta registros de histórico
+        historicos.delete()
+
+        # Deleta registros de GTIN local (GtinKit)
+        gtins_deletados, _ = GtinKit.objects.filter(sku_origem=sku_origem).delete()
+
+        msg = f"Rollback concluído. Deletados {deletados_bl} anúncios no BaseLinker e {gtins_deletados} GTINs locais limpos. SKUs reciclados: {', '.join(skus_reciclados)}."
+        logger.warning(msg)
+        if erros:
+            logger.error(f"Erros encontrados no rollback: {'; '.join(erros)}")
+
+        return {
+            "sucesso": True,
+            "msg": msg,
+            "deletados_bl": deletados_bl,
+            "gtins_deletados": gtins_deletados,
+            "erros": erros,
+        }
+
+    def executar_exclusao_individual(self, id_kit: str, sku_kit: str) -> Dict:
+        """
+        Deleta um único produto do BaseLinker, remove do histórico local,
+        limpa o GTIN associado a esse SKU de kit e recicla o SKU.
+        """
+        logger.warning(f"Iniciando exclusão individual -> SKU Kit={sku_kit} | ID Kit={id_kit}")
+        
+        # Deleta do BaseLinker
+        sucesso_bl = False
+        erro_bl = None
+        try:
+            resp_del = self.client._request("deleteInventoryProduct", {
+                "inventory_id": self.ID_INVENTARIO,
+                "product_id": int(id_kit),
+            })
+            if resp_del.get("status") == "SUCCESS":
+                sucesso_bl = True
+            else:
+                erro_bl = resp_del.get("error_message")
+        except Exception as e:
+            erro_bl = str(e)
+
+        # Inativa o GTIN correspondente na GS1 Brasil se ele existir
+        from integracoes.gs1.client import get_gs1_client
+        gs1 = get_gs1_client()
+        gtins_kit = GtinKit.objects.filter(sku_kit=sku_kit).exclude(gtin='PENDENTE').exclude(gtin='').values_list('gtin', flat=True)
+        for g in gtins_kit:
+            try:
+                logger.warning(f"Chamando inativação GS1 para o GTIN {g} devido à exclusão individual.")
+                gs1.inativar_ou_excluir_produto(g)
+            except Exception as e:
+                logger.error(f"Erro ao inativar GTIN {g} na GS1 durante exclusão: {e}")
+
+        # Recicla o SKU
+        self._reciclar_numero(sku_kit)
+
+        # Deleta do histórico local
+        HistoricoKit.objects.filter(id_kit=id_kit).delete()
+
+        # Deleta do banco de GTINs local (GtinKit)
+        GtinKit.objects.filter(sku_kit=sku_kit).delete()
+
+        if sucesso_bl:
+            msg = f"Produto {sku_kit} excluído com sucesso do BaseLinker e GTIN local removido."
+            return {"sucesso": True, "msg": msg}
+        else:
+            msg = f"GTIN local e histórico de {sku_kit} limpos, mas falhou ao excluir no BaseLinker: {erro_bl}."
+            return {"sucesso": True, "msg": msg}

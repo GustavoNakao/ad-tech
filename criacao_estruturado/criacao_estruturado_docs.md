@@ -15,6 +15,7 @@ criacao_estruturado/
 ├── models/
 │   ├── historico_kit.py          # Registro de kits criados
 │   ├── gtin_kit.py               # Cache de GTINs/EANs por kit
+│   ├── ncm_gpc.py                # Mapeamento permanente NCM -> GPC
 │   ├── numero_reciclado.py       # SKUs com falha para reaproveitamento
 │   ├── baselinker_kit_sku.py     # Cache de SKUs no BaseLinker
 │   └── controle_sequencia.py    # Sequência de SKUs (legado)
@@ -49,6 +50,15 @@ Persistência de GTINs gerados na GS1 Brasil. Mapeia e rastreia o GTIN gerado in
 | `criado_em` | DateTimeField | Auto preenchido |
 
 **Regra de Unicidade:** O modelo indexa individualmente por `sku_kit` (a restrição `unique_together` de `sku_origem` e `quantidade` foi removida para permitir que lotes de grade criados em momentos diferentes gerem novos GTINs independentes para o mesmo produto base).
+
+### `NcmGpc`
+Mapeamento permanente e dinâmico de NCM (8 dígitos) para o código GPC correspondente (8 dígitos). Substitui a classificação baseada em Inteligência Artificial.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `ncm` | CharField(20) | NCM do produto (Unique, Indexado) |
+| `gpc` | CharField(20) | Código GPC correspondente (Indexado) |
+| `criado_em` | DateTimeField | Auto preenchido |
 
 ### `NumeroReciclado`
 Tabela de SKUs que falharam durante a criação e devem ser reaproveitados na próxima tentativa.
@@ -103,11 +113,11 @@ Garante que o título fique entre 55 e 60 caracteres.
 Aplica Title Case preservando siglas (`LED`, `USB`, `HDMI`, `FM`, `UV`, etc.).
 
 ### `validar_descricao(desc) -> bool`
-Verifica se as 5 seções obrigatórias estão presentes:
-`SOBRE O PRODUTO`, `BENEFÍCIOS`, `DIFERENCIAIS DO PRODUTO`, `DÚVIDAS FREQUENTES`, `IDEAL PARA`
+Verifica se as 5 seções obrigatórias estão presentes na descrição. A validação é flexível e robusta, utilizando uma função de normalização que ignora caixa alta/baixa, marcas de markdown (`#`, `*`, `:`), acentos e espaços extras para evitar falsos positivos de seções ausentes geradas por IA.
+As seções verificadas são: `SOBRE O PRODUTO`, `BENEFÍCIOS`, `DIFERENCIAIS DO PRODUTO`, `DÚVIDAS FREQUENTES`, `IDEAL PARA`.
 
 ### `normalizar_descricao(desc) -> str`
-Remove lixo antes de `SOBRE O PRODUTO`, garantindo que a descrição sempre inicie pela seção correta.
+Remove lixo e conteúdo indesejado antes do início da seção `SOBRE O PRODUTO`, garantindo que a descrição sempre inicie pela seção correta. Suporta de forma robusta variações de caixa (maiúscula/minúscula) e formatações markdown no cabeçalho da seção.
 
 ---
 
@@ -286,40 +296,24 @@ Resolve campos de ficha técnica a partir dos dados físicos do produto sem prec
 
 ### Métodos de EAN/GS1
 
-#### `_obter_ean_kit(sku_origem, quantidade, dados_completos, sku_kit_final, titulo_final, forcar_unitario=False) -> str`
+#### `_obter_ean_kit(sku_origem, quantidade, dados_completos, sku_kit_final, titulo_final, forcar_unitario=False, gpc_manual=None) -> str`
 **Regra:** kits com `quantidade <= 1` não geram novo EAN (retorna `""`), **exceto** se `forcar_unitario` for `True`.
 
-Para `quantidade > 1` (Orquestração de Lote e Unicidade):
-1. **Cache de Lote (Execução):** No método `executar_criacao_grade`, mantemos um cache local em memória (`self.gtins_gerados_lote: Dict[int, str]`). Se a quantidade já teve um EAN gerado nesta execução (ex: Clássico já gerou para Qtd 2), a outra modalidade (ex: Premium) herda esse EAN em memória e registra a entrada histórica no banco local individualmente para o seu `sku_kit`.
-2. **Nova Consulta/Geração:** Se a quantidade ainda não está no cache de lote (ex: primeira variação de Qtd 2 sendo criada, ou uma execução de grade diferente/lote novo), o método `_obter_ean_kit` é acionado para obter ou gerar o EAN.
-3. **Persistência Local:** O método consulta e persiste em `GtinKit` usando `sku_kit=sku_kit_final` como chave de busca, garantindo reaproveitamento caso este SKU específico do kit já tenha sido registrado anteriormente.
-3. Se não existir:
-   - Extrai o título específico do anúncio unitário (removendo prefixo "Kit N").
-   - Tenta descobrir o GPC via `_descobrir_gpc_via_ia()`.
-   - Se falhar, tenta o fallback local via NCM (através de `_obter_fallback_gpc_por_ncm()`).
-   - Se ainda assim não determinar o GPC, levanta uma exceção de segurança que é capturada pelo bloco `except`.
-   - Resolve a marca real do produto via mapa de fabricantes do BaseLinker.
-   - Chama `gs1_client.gerar_ean_completo()`.
-   - Salva o GTIN oficial gerado no banco.
-4. **Geração Segura de Mock GTIN (Captura de Falha):** Se o processo da GS1 falhar por qualquer motivo (GPC indeterminado, erro de timeout ou limites de rate limit), gera um GTIN mock determinístico baseado em UUIDv5 a partir da seed `kit-{sku_origem}-{quantidade}`, iniciado com o dígito `1`. Isso evita travar o fluxo principal da aplicação ou enviar dados incorretos à GS1.
+Para `quantidade > 1` ou unitários com `forcar_unitario=True` (Orquestração de Lote, Compartilhamento Resiliente e Unicidade):
+1. **Busca Inteligente por Quantidade no Banco Local:** Antes de chamar a GS1 ou gerar novo código, o método realiza um lookup persistente na tabela local `GtinKit` filtrando por `sku_origem` e `quantidade` (excluindo EANs `PENDENTE` ou vazios). Se já existir um EAN gerado para aquela quantidade (ex: gerado pela variação clássica em um lote anterior ou execução parcial), ele é reaproveitado e herdado imediatamente. Isso garante 100% de consistência de compartilhamento de EAN entre Clássico e Premium mesmo em caso de falhas parciais ou execuções separadas, reduzindo drasticamente o consumo de créditos na GS1.
+2. **Cache de Lote (Execução):** Adicionalmente, no método `executar_criacao_grade`, mantemos um cache local em memória (`self.gtins_gerados_lote: Dict[int, str]`). Se a quantidade já teve um EAN gerado na mesma execução (ex: Clássico acabou de gerar para Qtd 2), a variação correspondente (ex: Premium) herda esse EAN em memória instantaneamente e registra a entrada histórica no banco local individualmente para o seu `sku_kit`.
+3. **Resolução de GPC (Sem IA):**
+   - **GPC Manual:** Tenta obter do parâmetro `gpc_manual` (passado a partir do painel na criação). Se for válido (8 dígitos), salva de forma definitiva e permanente na tabela local `NcmGpc`.
+   - **Mapeamento Local:** Se não foi fornecido manual ou for inválido, busca na tabela local `NcmGpc` pelo NCM do produto base.
+   - **Fallback Estático:** Se não houver mapeamento local, busca no dicionário estático local por faixas de NCM (`_obter_fallback_gpc_por_ncm`). Ao encontrar, grava imediatamente na tabela local `NcmGpc` para persistência definitiva futura.
+   - **Exceção:** Se o NCM for inédito e nenhum GPC foi fornecido ou sugerido, lança uma exceção exigindo o preenchimento manual no painel.
+4. **Persistência Local de GTIN:** O método consulta e persiste em `GtinKit` usando `sku_kit=sku_kit_final` como chave de busca, garantindo reaproveitamento caso este SKU específico do kit já tenha sido registrado anteriormente.
+5. **Tratamento Seguro de Falha na GS1 (Evita Rejeições):** Se a API da GS1 falhar (por timeout ou limite de conexões): para anúncios unitários (Qtd = 1), o sistema resgata e reutiliza o EAN original do produto base como fallback se for válido; para kits (Qtd > 1) ou se o unitário não tiver EAN, o sistema registra como 'PENDENTE' no banco local e retorna uma string vazia `""`. Isso impede a injeção de GTINs com formatos inválidos (ex: iniciados com '1') que seriam rejeitados duramente pelos marketplaces como o Mercado Livre.
 
-#### `_descobrir_gpc_via_ia(dados, titulo_especifico="") -> Optional[str]`
-Usa Groq (Llama 3.3 70B) para classificar o produto no GPC (Global Product Classification) de 8 dígitos usando o título do anúncio unitário e o NCM.
+#### `_obter_fallback_gpc_por_ncm(ncm_limpo) -> Optional[str]`
+Retorna o código GPC de fallback para NCMs comuns do estoque com base em regras estáticas (ex: `8481...` -> `10002602` para Torneiras/Misturadores, `8544...` -> `10000586` para Cabos/Conectores, etc.).
 
-**Regras de Classificação:**
-- Retorna apenas 8 dígitos numéricos.
-- Rejeita códigos terminados em `09` (inativos/genéricos da GS1) ou o código inativo `10101502`.
-- Não aceita códigos idênticos ao NCM do produto.
-- Em caso de falha ou impossibilidade de classificar, retorna `None` (ativando o fallback por NCM).
-
-**Base de Conhecimento Estruturada no Prompt:**
-O prompt da IA possui uma taxonomia de 14 categorias de produtos bem definidas com seus respectivos Bricks GPC válidos e ativos:
-1. **Artigos de Papelaria e Escrita:** `10001234` (Lápis), `10001235` (Canetas), `10001229` (Outros).
-2. **Ferramentas Manuais:** `10000424` (Chaves de Aperto), `10001859` (Outras).
-3. **Cremes e Cosméticos Corporal/Labial:** `10000356`.
-4. **Perfumes e Fragrâncias (Body Splash/Colônias):** `10000365`.
-5. **Sabonetes e Higiene Corporal:** `10000330`.
-6. **Cuidados e Estética Capilar (Shampoo/Condicionador):** `10006987`.
+**Taxonomia Base de Conhecimento:**
 7. **Artigos para Bebê (Chupetas/Mordedores):** `10000504`.
 8. **Cabos, Fios, Adaptadores e Conectores:** `10000586`.
 9. **Encanamento e Hidráulica (Torneiras/Registros):** `10002602`.
@@ -357,10 +351,11 @@ Retorna mensagem de erro descritiva ou `None` se OK.
 
 #### `_validar_conteudo_ia(conteudo, nome_original) -> Optional[str]`
 Valida se a IA gerou conteúdo válido antes de consumir SKU:
-- **Título:** não vazio, mínimo 10 chars
-- **Descrição:** não vazia, mínimo 100 chars, contém `SOBRE O PRODUTO` e `BENEFÍCIOS`
+- **Título:** não vazio, mínimo 10 chars.
+- **Descrição:** não vazia, mínimo 100 chars. Deve conter as seções `SOBRE O PRODUTO` e `BENEFÍCIOS` de forma flexível (validação case-insensitive e tolerante a markdown/acentos).
+- **Resiliência e Fallback:** Se a descrição gerada/fallback tiver excelente qualidade (tamanho > 150 caracteres) mas faltarem os termos exatos de cabeçalho, o sistema emite um warning no log e permite a criação do kit prosseguir normalmente, evitando abortos rígidos catastróficos que travariam a operação por causa de formatação de texto.
 
-Retorna mensagem de erro ou `None` se OK.
+Retorna mensagem de erro se a validação falhar completamente, ou `None` se estiver OK.
 
 ---
 
@@ -379,6 +374,21 @@ Persiste o registro de criação em `HistoricoKit`. Erros são apenas logados, n
 
 #### `_reciclar_numero(sku) -> None`
 Insere o SKU na tabela `NumeroReciclado` via SQL com `ON CONFLICT DO NOTHING`. Só processa SKUs numéricos.
+
+#### `executar_rollback_grade(sku_origem) -> Dict`
+Realiza o desfazimento completo (rollback) de um lote inteiro de 8 variações a partir do `sku_origem` (base).
+1. Obtém do histórico local todos os kits associados ao SKU de origem.
+2. Faz chamadas à API do BaseLinker (`deleteInventoryProduct`) para deletar cada anúncio fisicamente do catálogo externo.
+3. Remove os registros locais do banco de dados correspondente à criação (`HistoricoKit`).
+4. Remove os GTINs/EANs gerados no banco local (`GtinKit`) para aquele SKU de origem.
+5. Adiciona os SKUs deletados à tabela `NumeroReciclado` para que sejam reaproveitados em novas tentativas, evitando lacunas e mantendo a consistência.
+
+#### `executar_exclusao_individual(id_kit, sku_kit) -> Dict`
+Permite a exclusão isolada de uma única variação (anúncio individual) criada incorretamente.
+1. Executa a deleção física do anúncio no BaseLinker via `deleteInventoryProduct`.
+2. Remove o registro correspondente no histórico (`HistoricoKit`).
+3. Remove o GTIN associado a esse SKU de kit final do banco de dados local (`GtinKit`).
+4. Recicla o SKU inserindo-o em `NumeroReciclado` para reaproveitamento posterior.
 
 #### `_get_vendas_60_dias(sku) -> int`
 Consulta `ItemPedido` para contar quantidade total vendida nos últimos 60 dias. Usado pelo Motor R831 v2 para cálculo de tarifa reduzida. Retorna `0` em caso de erro.
@@ -425,7 +435,7 @@ executar_criacao_grade(
     c. Limpeza agressiva do título: remove Kit, Unidade, Unitário, Premium, Clássico, Pack, Original
     d. Adicionar prefixo "Kit N" para quantidade > 1
     e. ajustar_titulo() — padding/corte para 55–60 chars
-    f. Determinar tag principal (classico/premium) e injetar tag "Marketplace" se Qtd == 1
+    f. Determinar tag principal (classico/premium) e injetar tag "Marketplace" se Qtd == 1 e for modalidade Clássico
     g. Montar payload completo
     h. _enviar_para_baselinker() → obter id_kit
     i. _salvar_historico()
@@ -468,6 +478,21 @@ Painel web protegido por `@cadastro_required`.
 1. Recebe SKU + category_id_ml + `gerar_ean_unitario` do formulário
 2. Chama `servico.executar_criacao_grade(..., gerar_ean_unitario=...)`
 3. Exibe mensagem de sucesso com SKUs criados
+
+### Ação `rollback`
+1. Recebe o SKU de origem a ser desfeito.
+2. Chama `servico.executar_rollback_grade(sku_rollback)`.
+3. Exibe feedback de sucesso ou falha no painel e recicla os SKUs e GTINs locais.
+
+### Ação `excluir_individual`
+1. Recebe os parâmetros `id_kit` (BaseLinker Product ID) e `sku_kit` (SKU do kit).
+2. Chama `servico.executar_exclusao_individual(id_kit, sku_kit)`.
+3. Limpa o histórico e o GTIN local, recicla o SKU e remove do catálogo do BaseLinker, exibindo mensagem de status.
+
+### Ação `cancelar_lote`
+1. Recebe o SKU de origem (`sku_origem`) via requisição assíncrona AJAX.
+2. Salva a flag `"cancelado"` no cache do Django (`criacao_lote_{sku_origem}`) com validade de 120 segundos.
+3. Permite a interrupção instantânea do loop de criação de grade e executa a limpeza completa via `executar_rollback_grade(sku_origem)`, incluindo a inativação imediata dos GTINs gerados até o momento diretamente na API da GS1 Brasil.
 
 ### Função `_analisar_com_grade()`
 Calcula grade de preços sem salvar nada. Retorna:
@@ -514,11 +539,11 @@ Banco PostgreSQL → get_next_kit_sku()
 | Kit 4 Premium | `4_premium` | 4 | premium |
 
 **Regras de EAN por variação:**
-- Quantidade 1 → usa EAN do produto base (**ou gera novo se `gerar_ean_unitario` for True**)
-- Quantidade > 1 → gera novo EAN na GS1, compartilhado entre Clássico e Premium do mesmo nível
+- Quantidade 1 → Usa o EAN legítimo do produto base. Se o produto base não possuir EAN cadastrado ou se estiver como `'PENDENTE'`, o sistema ativa automaticamente a autogeração resiliente (mesmo com a flag `gerar_ean_unitario` desligada) para garantir que o unitário vá ao ar com um EAN válido na GS1, ou se `gerar_ean_unitario` for `True` explicitamente.
+- Quantidade > 1 → Gera um novo EAN oficial na GS1, compartilhado rigorosamente entre as variações Clássica e Premium de mesmo nível (quantidade) através da busca inteligente por quantidade no banco de dados local. Isso limita a exatamente 4 EANs gerados na GS1 por lote completo de 8 anúncios.
 
 **Tags Especiais:**
-- Quantidade 1 → Recebe adicionalmente a tag `Marketplace` no BaseLinker para distinção visual.
+- Quantidade 1 (apenas na modalidade Clássico) → Recebe adicionalmente a tag `Marketplace` no BaseLinker para distinção visual.
 
 **Peso por variação:** `peso_base × quantidade` (+ peso_secundario × quantidade se Kit Misto)
 
@@ -532,6 +557,50 @@ Banco PostgreSQL → get_next_kit_sku()
 | `MercadoLivreClient` | Busca de categorias e atributos obrigatórios |
 | `GS1Client` | Registro de GTINs/EANs oficiais |
 | `GeminiClient` | Agentes de Compliance, Título e Descrição |
-| `GroqClient` | Agentes de Ficha Técnica, Keywords e GPC |
+| `GroqClient` | Agentes de Ficha Técnica e Keywords |
 | `Calculadora` (R831 v2) | Cálculo de preços (promoção + vitrine) |
 | `TermosProibidos` | Validação de palavras proibidas no título |
+
+---
+
+## Interrupção em Tempo Real e Inativação na GS1
+
+### Visão Geral do Fluxo de Cancelamento
+
+Durante o processo de geração da grade de 8 anúncios (que leva em torno de 30 segundos devido às chamadas externas da API e IA), o usuário pode perceber a configuração de um produto incorreto e solicitar a interrupção imediata do processo. O sistema foi desenvolvido com suporte a cancelamento concorrente assíncrono em tempo real.
+
+```mermaid
+sequenceDiagram
+    actor Usuario as Usuário (Painel Web)
+    participant JS as Frontend (JavaScript)
+    participant View as Django View (cancelar_lote)
+    participant Cache as Django Cache
+    participant Service as CriadorKitsService (executar_criacao_grade)
+    participant BL as API BaseLinker
+    participant GS1 as API GS1 Brasil (CNP)
+
+    Usuario->>JS: Clica em "Parar Criação e Excluir GTINs"
+    Note over JS: Extrai SKU de origem (sku_manual)<br/>e valida intenção
+    JS->>View: Envia requisição AJAX POST (acao=cancelar_lote)
+    View->>Cache: Salva criacao_lote_{sku_origem} = "cancelado"
+    View-->>JS: Retorna confirmação de interrupção
+    
+    Note over Service: No início de cada iteração da grade
+    Service->>Cache: Consulta criacao_lote_{sku_origem}
+    alt Status é "cancelado"
+        Note over Service: Aborta criação dos anúncios seguintes
+        Service->>BL: Deleta anúncios do lote já cadastrados (deleteInventoryProduct)
+        Service->>GS1: Inativa/Exclui EANs gerados no lote (inativar_ou_excluir_produto)
+        Note over GS1: Tenta DELETE físico. Fallback para PATCH INACTIVE
+        Note over Service: Recicla todos os SKUs no banco de dados local
+        Service-->>Usuario: Feedback visual de sucesso do rollback e cancelamento
+    else Status é "executando"
+        Note over Service: Prossegue criando o anúncio atual
+    end
+```
+
+### Detalhes Técnicos
+
+1. **Overlay de Progresso e Comunicação AJAX:** O template `painel_kits.html` exibe um overlay em tela cheia com um spinner e um botão de interrupção. Quando o botão é clicado, o JS captura de forma precisa o SKU de origem do formulário (obtido através do input `sku_manual`) e envia via `fetch` assíncrono para a view do Django com `acao=cancelar_lote`.
+2. **Consistência Atômica de GTINs:** O backend, ao detectar a flag `"cancelado"` no cache do Django no início de qualquer iteração de anúncio do lote, interrompe imediatamente o loop e chama o método `executar_rollback_grade(sku_origem)`. 
+3. **Limpeza na GS1 Brasil:** O rollback lê os GTINs cadastrados localmente para aquele lote de criação e dispara requisições de exclusão/inativação na API oficial da GS1 Brasil (CNP) para cada um dos EANs recém-gerados, eliminando desperdício e impedindo a publicação de GTINs inválidos gerados a partir de produtos incorretos.

@@ -9,6 +9,7 @@ from core.decorators import cadastro_required
 from integracoes.mercadolivre import MercadoLivreClient, CATEGORIA_PADRAO_BASELINKER
 from .services.criador_kits_service import CriadorKitsService
 from .models.historico_kit import HistoricoKit
+from .models.ncm_gpc import NcmGpc
 
 
 def _resolver_category_ml(url_produto_ml: str) -> str:
@@ -39,6 +40,17 @@ def _analisar_com_grade(servico: CriadorKitsService, sku: str, sku_secundario: s
         dados = servico._baixar_dados_produto(pid)
         if not dados:
             return None
+
+        # Resolver NCM e sugerir GPC
+        ncm_bruto = str(dados.get("ncm", "00000000"))
+        ncm_limpo = ncm_bruto.replace(".", "").strip()
+        gpc_sugerido = ""
+        if ncm_limpo:
+            mapeamento = NcmGpc.objects.filter(ncm=ncm_limpo).first()
+            if mapeamento:
+                gpc_sugerido = mapeamento.gpc
+            else:
+                gpc_sugerido = servico._obter_fallback_gpc_por_ncm(ncm_limpo) or ""
 
         e_misto = bool(sku_secundario)
 
@@ -71,6 +83,8 @@ def _analisar_com_grade(servico: CriadorKitsService, sku: str, sku_secundario: s
                 "bloqueado":       True,
                 "motivo_bloqueio": grade.motivo_bloqueio,
                 "e_misto":         e_misto,
+                "gpc_sugerido":    gpc_sugerido,
+                "ncm_produto":     ncm_limpo,
             }
 
         from precificacao.models.regras import RegrasPrecificacao
@@ -134,6 +148,8 @@ def _analisar_com_grade(servico: CriadorKitsService, sku: str, sku_secundario: s
             "status_emoji":    emoji,
             "status_label":    label,
             "status_mensagem": mensagem,
+            "gpc_sugerido":    gpc_sugerido,
+            "ncm_produto":     ncm_limpo,
         }
 
     except Exception as exc:
@@ -166,6 +182,8 @@ def painel_kits(request):
                 messages.error(request, f"SKU {sku_manual} não encontrado no BaseLinker.")
                 return redirect("painel_kits")
 
+            gpc_manual = request.POST.get("gpc_manual", "").strip()
+
             # Resolve category_id do ML via URL do produto
             category_id_ml = _resolver_category_ml(url_produto_ml)
 
@@ -181,11 +199,16 @@ def painel_kits(request):
                 analise["categoria_origem"] = (
                     "via URL do produto" if url_produto_ml else "padrão Estruturado"
                 )
+                if gpc_manual:
+                    analise["gpc_manual"] = gpc_manual
+                else:
+                    analise["gpc_manual"] = analise.get("gpc_sugerido", "")
             else:
                 messages.error(request, "Falha ao analisar o produto. Verifique os dados.")
 
         elif acao == "confirmar_criacao":
             category_id_ml = request.POST.get("category_id_ml")
+            gpc_manual = request.POST.get("gpc_manual", "").strip() or None
             
             if not sku_manual:
                 messages.error(request, "Dados de SKU ausentes para criação.")
@@ -203,6 +226,7 @@ def painel_kits(request):
                 sku_secundario=sku_secundario,
                 category_id_ml=category_id_ml,
                 gerar_ean_unitario=gerar_ean_unitario,
+                gpc_manual=gpc_manual,
             )
             if resp["sucesso"]:
                 tipo = "Kit Misto" if e_misto else "Kit"
@@ -211,6 +235,43 @@ def painel_kits(request):
             else:
                 messages.error(request, f"Falha na criação da grade: {resp['msg']}")
                 erro_detalhe = resp.get("erro_detalhe")
+
+        elif acao == "rollback":
+            sku_rollback = request.POST.get("sku_rollback", "").strip()
+            if not sku_rollback:
+                messages.error(request, "Digite o SKU de origem para realizar o desfazer (rollback).")
+                return redirect("painel_kits")
+
+            resp = servico.executar_rollback_grade(sku_rollback)
+            if resp["sucesso"]:
+                messages.success(request, f"✅ {resp['msg']}")
+            else:
+                messages.error(request, f"❌ {resp['msg']}")
+            return redirect("painel_kits")
+
+        elif acao == "excluir_individual":
+            id_kit = request.POST.get("id_kit", "").strip()
+            sku_kit = request.POST.get("sku_kit", "").strip()
+            if not id_kit or not sku_kit:
+                messages.error(request, "Dados ausentes para a exclusão individual.")
+                return redirect("painel_kits")
+
+            resp = servico.executar_exclusao_individual(id_kit, sku_kit)
+            if resp["sucesso"]:
+                messages.success(request, f"✅ {resp['msg']}")
+            else:
+                messages.error(request, f"❌ {resp['msg']}")
+            return redirect("painel_kits")
+
+        elif acao == "cancelar_lote":
+            sku_origem = request.POST.get("sku_origem", "").strip()
+            if sku_origem:
+                from django.core.cache import cache
+                cache.set(f"criacao_lote_{sku_origem}", "cancelado", timeout=120)
+                from django.http import JsonResponse
+                return JsonResponse({"sucesso": True, "msg": f"Interrupção solicitada com sucesso para o SKU {sku_origem}."})
+            from django.http import JsonResponse
+            return JsonResponse({"sucesso": False, "msg": "SKU de origem ausente."}, status=400)
 
     agora       = timezone.now()
     inicio_hoje = agora.replace(hour=0, minute=0, second=0, microsecond=0)
