@@ -744,6 +744,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
                 system_prompt=self.PROMPT_TITULO,
                 user_input=input_prompt,
                 modelo="gemini-2.5-flash",
+                use_cache=(tentativa == 0),
             )
 
             try:
@@ -797,6 +798,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
                 system_prompt=self.PROMPT_TITULO_KITS,
                 user_input=input_prompt,
                 modelo="gemini-2.5-flash",
+                use_cache=(tentativa == 0),
             )
 
             try:
@@ -934,6 +936,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
                 system_prompt=self.PROMPT_COPY,
                 user_input=input_prompt,
                 modelo="gemini-2.5-flash",
+                use_cache=(tentativa == 0),
             )
 
             try:

@@ -145,6 +145,7 @@ Retorna JSON: `{"status": "ok"|"bloqueado"|"revisar", ...}`
 - Proibido: `Premium`, `Clássico`, `Original`, `Pack`, `Kit` (no unitário), caracteres especiais
 - Estrutura: Palavra-chave principal → Linha → Capacidade → Quantidade → Reforço
 - 3 tentativas; na falha, aplica `ajustar_titulo()` em Python
+- **Resiliência contra cache corrompido:** utiliza `use_cache=(tentativa == 0)`. Se a primeira tentativa (que lê do cache) falhar nos critérios de validação, as tentativas subsequentes ignoram o cache e consultam a API em tempo real.
 
 ### Regras do Agente 2B — Grade de Títulos
 - Gera 8 títulos neutros (sem quantidade) com ~45–55 chars
@@ -152,6 +153,7 @@ Retorna JSON: `{"status": "ok"|"bloqueado"|"revisar", ...}`
 - Mapeamento interno: `t1_a → 1_classico`, `t1_b → 1_premium`, etc.
 - Inclui campo `estrategia_seo` obrigatório antes dos títulos
 - Fallback: usa o nome original formatado se falhar
+- **Resiliência contra cache corrompido:** utiliza `use_cache=(tentativa == 0)`. Se a primeira tentativa (que lê do cache) falhar no parser de JSON ou nos critérios de grade, as tentativas subsequentes ignoram o cache e realizam chamadas diretas à API.
 
 ### Regras do Agente 4 — Ficha Técnica
 - Usa **exatamente** os nomes dos atributos fornecidos como chaves
@@ -173,6 +175,7 @@ Retorna JSON: `{"status": "ok"|"bloqueado"|"revisar", ...}`
 - DIFERENCIAIS: formato `Característica — benefício`
 - Proibido: adjetivos vazios, clichês de marketing, EAN/SKU no texto
 - 3 tentativas; na última aceita o melhor disponível
+- **Resiliência contra cache corrompido:** utiliza `use_cache=(tentativa == 0)`. Se o cache retornar uma descrição incompleta ou inválida, a tentativa seguinte forçará a consulta em tempo real da API para re-gerar e atualizar o cache com sucesso.
 
 ### Método `gerar_conteudo()`
 ```
