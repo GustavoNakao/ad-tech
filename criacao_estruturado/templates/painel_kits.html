@@ -6,7 +6,10 @@
     <title>R831 — Gerador de Kits</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+          rel="stylesheet"
+          integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
+          crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -266,7 +269,7 @@
     <div class="ph">
         <div>
             <h1>Gerador de <span>Kits</span></h1>
-            <p>Grade de 8 anúncios com Preço de Promoção e Vitrine calculados automaticamente</p>
+            <p>Grade de anúncios com Preço de Promoção e Vitrine calculados automaticamente</p>
         </div>
         <button onclick="toggleHistory()" class="btn-history">
             <i class="fa-solid fa-clock"></i> Histórico de Kits ({{ ultimos_kits|length }})
@@ -319,84 +322,86 @@
                     <span class="chip">Manual</span>
                 </div>
                 <div class="cb">
-                    <form method="POST" id="form-analisar">
+                    <form method="POST" id="form-criacao">
                         {% csrf_token %}
-                        <input type="hidden" name="acao" value="analisar">
+                        <input type="hidden" name="acao" value="confirmar_criacao">
 
                         <div class="fg">
                             <label class="fl">SKU do Produto Principal</label>
                             <input type="text" name="sku_manual" id="sku-inp" class="fi"
-                                   placeholder="Ex: 30565" autofocus autocomplete="off" value="{{ analise.sku_manual|default:'' }}">
+                                   placeholder="Ex: 30565" autofocus autocomplete="off" required>
                         </div>
 
                         <div class="fg">
                             <label class="fl" style="display:flex;align-items:center;gap:5px;">
-                                <i class="fa-brands fa-mercadopago" style="color:#00c8ff;"></i>
-                                URL do Produto no ML
-                                <span style="font-size:9px;color:#3a4a5c;margin-left:4px;">(opcional — para categoria correta)</span>
+                                <i class="fa-solid fa-sitemap" style="color:#00c8ff;"></i>
+                                Árvore da Categoria ou URL do ML
+                                <span style="font-size:9px;color:#ff4d6d;margin-left:4px;">(obrigatório)</span>
                             </label>
-                            <input type="url" name="url_produto_ml" id="url-ml" class="fi"
-                                   placeholder="https://www.mercadolivre.com.br/..." autocomplete="off" value="{{ analise.url_produto_ml|default:'' }}">
+                            <input type="text" name="categoria_ml" id="categoria-ml" class="fi"
+                                   placeholder="Ex: Casa, Móveis e Decoração / Banheiros / Sifões (ou MLB277472)" autocomplete="off" required>
                         </div>
 
                         <div class="fg">
-                            <label class="fl" style="display:flex;align-items:center;gap:5px;">
-                                <i class="fa-solid fa-barcode" style="color:#00c8ff;"></i>
-                                Código GPC (Global Product Classification)
-                                <span style="font-size:9px;color:#3a4a5c;margin-left:4px;">(opcional — autocompleta se mapeado)</span>
+                            <label class="fl" style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+                                <span style="display:inline-flex;align-items:center;gap:5px;">
+                                    <i class="fa-solid fa-barcode" style="color:#00c8ff;"></i>
+                                    Código GPC (Global Product Classification)
+                                </span>
+                                <a href="https://gpc.gs1.org/" target="_blank" style="color:#00c8ff;text-decoration:none;font-size:10px;display:inline-flex;align-items:center;gap:4px;" title="Pesquisar código Brick GPC de 8 dígitos no portal oficial da GS1">
+                                    <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:9px;"></i> Pesquisar GPC
+                                </a>
                             </label>
                             <input type="text" name="gpc_manual" id="gpc-inp" class="fi" maxlength="8" pattern="\d{8}"
-                                   placeholder="Ex: 10002602" autocomplete="off" value="{{ analise.gpc_manual|default:'' }}">
-                            
-                            {% if analise %}
-                                {% if analise.gpc_sugerido %}
-                                    <div style="font-size:11px; margin-top:6px; display:flex; align-items:center; gap:5px; color:var(--success);">
-                                        <i class="fa-solid fa-circle-check"></i>
-                                        <span>GPC auto-sugerido com base no NCM: <b>{{ analise.gpc_sugerido }}</b></span>
-                                    </div>
-                                {% else %}
-                                    <div style="font-size:11px; margin-top:6px; display:flex; align-items:center; gap:5px; color:var(--warn);">
-                                        <i class="fa-solid fa-triangle-exclamation"></i>
-                                        <span>NCM inédito. Insira o GPC de 8 dígitos para mapear de forma permanente.</span>
-                                    </div>
-                                {% endif %}
-                            {% endif %}
+                                   placeholder="Ex: 10000510 (8 dígitos)" autocomplete="off" required>
                         </div>
 
                         <!-- Toggle Kit Misto -->
                         <label class="toggle-misto">
-                            <input type="checkbox" id="chk-misto" {% if analise.e_misto %}checked{% endif %}>
-                            <span>Kit Misto — <b>2 SKUs diferentes</b></span>
+                            <input type="checkbox" id="chk-misto">
+                            <span>Kit Misto — <b>Até 5 SKUs no total</b></span>
                         </label>
 
                         <label class="toggle-misto">
-                            <input type="checkbox" name="gerar_ean_unitario" id="chk-unit-ean" {% if analise.gerar_ean_unitario %}checked{% endif %}>
+                            <input type="checkbox" name="gerar_ean_unitario" id="chk-unit-ean">
                             <span>Gerar <b>Novo GTIN</b> para o Unitário</span>
                         </label>
 
-                        <div id="campo-sku-secundario" class="{% if analise.e_misto %}visivel{% endif %}">
+                        <div id="campo-sku-secundario" class="">
                             <div class="fg">
-                                <label class="fl">SKU Secundário</label>
-                                <input type="text" name="sku_secundario" id="sku-sec" class="fi"
-                                       placeholder="Ex: 30566" autocomplete="off" value="{{ analise.sku_secundario|default:'' }}" {% if analise.e_misto %}required{% endif %}>
+                                <label class="fl" style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span>SKUs Secundários (Adicionais)</span>
+                                    <button type="button" id="btn-add-sku-sec" class="badge-tipo" style="cursor:pointer; background:var(--cyan); color:#050810; border:none; padding:4px 8px; border-radius:4px; font-family:var(--fh); font-weight:700; font-size:10px;">
+                                        <i class="fa-solid fa-plus"></i> Adicionar
+                                    </button>
+                                </label>
+                                <div id="container-skus-secundarios" style="display:flex; flex-direction:column; gap:8px;">
+                                    <div class="input-secundario-wrapper" style="display:flex; gap:8px; align-items:center;">
+                                        <input type="text" name="sku_secundario" class="fi sku-sec-input"
+                                               placeholder="Ex: 30566" autocomplete="off">
+                                        <button type="button" class="btn-action-delete btn-remove-sku-sec" style="flex-shrink:0; width:38px; height:38px;" title="Remover">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <button type="submit" class="btn-criar" id="btn-analisar">
-                            <i class="fa-solid fa-magnifying-glass-chart"></i> Analisar Produto
+                        <button type="submit" class="btn-criar" id="btn-confirmar" style="background: linear-gradient(135deg, #00e599, #009e6a);">
+                            <i class="fa-solid fa-layer-group"></i> Criar Grade de Kits no BaseLinker
                         </button>
                     </form>
 
                     <div class="hint">
                         <i class="fa-solid fa-circle-info"></i>
-                        <span>O sistema gera a grade de 8 anúncios (1/2/3/4un × Clássico/Premium) com Preço de Promoção e Vitrine automaticamente.</span>
+                        <span>O sistema gera a grade de anúncios (1/2/3/4un × Clássico/Premium - limitado a 3un para kit misto) com Preço de Promoção e Vitrine automaticamente.</span>
                     </div>
 
                     <div class="ai-sec">
                         <div class="ai-lbl">Gerado automaticamente</div>
                         <div class="ai-row"><i class="fa-solid fa-heading" style="color:var(--cyan)"></i><span class="truncate-title">Título SEO (máx. 60 chars)</span><span class="at tg">Gemini</span></div>
                         <div class="ai-row"><i class="fa-solid fa-align-left" style="color:var(--cyan)"></i><span class="truncate-title">Descrição estruturada</span><span class="at tg">Gemini</span></div>
-                        <div class="ai-row"><i class="fa-solid fa-tag" style="color:var(--success)"></i><span class="truncate-title">Grade de 8 preços (Promoção + Vitrine)</span><span class="at ta">Engine v2</span></div>
+                        <div class="ai-row"><i class="fa-solid fa-tag" style="color:var(--success)"></i><span class="truncate-title">Grade de preços (Promoção + Vitrine)</span><span class="at ta">Engine v2</span></div>
                         <div class="ai-row"><i class="fa-solid fa-weight-hanging" style="color:var(--success)"></i><span class="truncate-title">Peso cubado vs real (MAX)</span><span class="at ta">Engine v2</span></div>
                         <div class="ai-row"><i class="fa-solid fa-truck" style="color:var(--warn)"></i><span class="truncate-title">Frete com desconto MercadoLíder 50%</span><span class="at tw">Engine v2</span></div>
                     </div>
@@ -433,142 +438,62 @@
                 <div class="erro-detail-msg">{{ erro_detalhe }}</div>
             </div>
             {% endif %}
-
-            {# ── GRADE DE ANÚNCIOS ── #}
-            {% if analise and not analise.bloqueado %}
-            <div class="card" style="animation-delay:.2s">
-                <div class="ch" style="padding-bottom: 15px;">
-                    <h2><i class="fa-solid fa-table-cells"></i> Grade de 8 Anúncios (Data Density)</h2>
-                </div>
-                <div class="cb" style="padding-top: 0;">
-                    
-                    {% if analise.anuncios %}
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Ref</th>
-                                    <th>Qtd</th>
-                                    <th>Modalidade</th>
-                                    <th class="text-right">Vitrine</th>
-                                    <th class="text-right">Promoção</th>
-                                    <th class="text-right">Frete</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for a in analise.anuncios %}
-                                <tr class="{% if a.bloqueado %}bloqueado{% elif a.modalidade == 'premium' %}premium{% endif %}">
-                                    <td>
-                                        <div style="display:flex; flex-direction:column; gap:4px;">
-                                            {% if a.bloqueado %}<span class="badge-tipo blk" style="position:static; display:inline-block; width:fit-content;">🔴 Bloq.</span>{% endif %}
-                                            {% if a.tarifa_reduzida %}<span class="badge-tipo tar-red" style="position:static; display:inline-block; width:fit-content;">🎯 Tar. Red.</span>{% endif %}
-                                        </div>
-                                    </td>
-                                    <td style="font-weight: 600;">{{ a.quantidade }}un</td>
-                                    <td>
-                                        <span class="{% if a.modalidade == 'premium' %}text-premium{% else %}text-normal{% endif %}" style="font-size: 11px; font-weight: 600; text-transform: uppercase;">
-                                            {{ a.modalidade }}
-                                        </span>
-                                        {% if a.erros %}<div style="font-size:10px; color:var(--danger); margin-top:4px; max-width:150px; white-space:normal;">⚠️ {{ a.erros|join:", " }}</div>{% endif %}
-                                    </td>
-                                    <td class="text-right price-vitrine">R$ {{ a.preco_vitrine|floatformat:2 }}</td>
-                                    <td class="text-right price-promo">R$ {{ a.preco_promocao|floatformat:2 }}</td>
-                                    <td class="text-right price-frete">R$ {{ a.custo_logistico|floatformat:2 }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% endif %}
-
-                    {% if analise.alerta_upsell %}
-                    <div class="upsell-box">{{ analise.alerta_upsell }}</div>
-                    {% endif %}
-                </div>
-            </div>
-            {% endif %}
-
         </div><!-- Fim Coluna Esquerda -->
 
         <!-- COLUNA DIREITA (40% - STICKY) -->
         <div class="sticky-sidebar">
             <div class="card" style="animation-delay:.24s">
-                <div class="ch">
-                    <h2><i class="fa-solid fa-clipboard-list"></i> Resumo do Kit</h2>
+                <div class="ch" style="border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px;">
+                    <h2><i class="fa-solid fa-clock-rotate-left"></i> Últimos Kits Criados</h2>
                 </div>
-                <div class="cb">
-                    {% if analise %}
-                        {% if analise.bloqueado %}
-                            <div class="bloqueio-box">
-                                <div class="bloqueio-titulo">🔴 PRODUTO BLOQUEADO</div>
-                                <div class="bloqueio-msg">{{ analise.motivo_bloqueio }}</div>
-                            </div>
-                        {% else %}
-                            <!-- Status banner -->
-                            <div class="status-banner {{ analise.status }}">
-                                <div class="sb-emoji">{{ analise.status_emoji }}</div>
-                                <div class="sb-body">
-                                    <div class="sb-label truncate-title" style="white-space: normal; max-width: 100%;">{{ analise.status_label }}</div>
-                                    <div class="sb-msg truncate-title" style="white-space: normal; max-width: 100%;">{{ analise.status_mensagem }}</div>
-                                </div>
-                            </div>
-
-                            <div style="margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
-                                <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">SKU Origem:</div>
-                                <div style="font-family: var(--fm); font-size: 16px; font-weight: bold; color: var(--text);">{{ analise.sku_manual }}</div>
-                            </div>
-
-                            {% if analise.e_misto %}
-                            <div style="margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
-                                <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">SKU Secundário (Misto):</div>
-                                <div style="font-family: var(--fm); font-size: 16px; font-weight: bold; color: var(--purple);">{{ analise.sku_secundario }}</div>
-                            </div>
-                            {% endif %}
-
-                            {% if analise.category_id_ml %}
-                            <div style="margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
-                                <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">Categoria ML:</div>
-                                <div style="font-size: 14px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
-                                    <i class="fa-brands fa-mercadopago" style="color:#00c8ff;"></i> {{ analise.category_id_ml }}
-                                </div>
-                            </div>
-                            {% endif %}
-
-                            <div style="margin-bottom: 24px;">
-                                <div style="font-size: 11px; color: var(--muted); margin-bottom: 6px;">Gerar GTIN Unitário:</div>
-                                <div>{% if analise.gerar_ean_unitario %}<span class="chip" style="background:rgba(0,229,153,.1);color:var(--success); border-color: rgba(0,229,153,0.3); font-size: 11px;">Sim, Gerar Novo</span>{% else %}<span class="chip" style="background:rgba(255,193,77,.1);color:var(--warn); border-color: rgba(255,193,77,0.3); font-size: 11px;">Não Gerar</span>{% endif %}</div>
-                            </div>
-
-                            <!-- O formulário de criação fica escondido aqui -->
-                            <form method="POST" id="form-criacao">
-                                {% csrf_token %}
-                                <input type="hidden" name="acao" value="confirmar_criacao">
-                                <input type="hidden" name="sku_manual" value="{{ analise.sku_manual }}">
-                                <input type="hidden" name="sku_secundario" value="{{ analise.sku_secundario }}">
-                                <input type="hidden" name="category_id_ml" value="{{ analise.category_id_ml }}">
-                                <input type="hidden" name="gerar_ean_unitario" value="{% if analise.gerar_ean_unitario %}on{% endif %}">
-                                <input type="hidden" name="gpc_manual" value="{{ analise.gpc_manual|default:'' }}">
-                            </form>
-                            
-                            {% if analise.status == 'vermelho' %}
-                                <div style="background:rgba(255,193,77,.1); color:var(--warn); padding:12px; border-radius:9px; font-size:11px; text-align:center; border:1px solid rgba(255,193,77,.2); margin-bottom:12px;">
-                                    <i class="fa-solid fa-triangle-exclamation"></i> <b>ATENÇÃO:</b> Margem Insuficiente. A criação está liberada para teste, mas verifique os preços.
-                                </div>
-                            {% endif %}
-
-                            <button type="submit" form="form-criacao" class="btn-criar" style="background:linear-gradient(135deg,#00e599,#009e6a);" id="btn-confirmar">
-                                <i class="fa-solid fa-layer-group"></i> Criar Kit no BaseLinker
-                            </button>
-                            <p style="font-size:10px; color:var(--muted); text-align:center; margin-top:10px;">
-                                <i class="fa-solid fa-robot"></i> A IA gerará 8 títulos únicos.<br>Este processo pode levar até 30 segundos.
-                            </p>
-                        {% endif %}
+                <div class="cb" style="padding: 0;">
+                    {% if ultimos_kits %}
+                    <div style="max-height: 520px; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Kit</th>
+                                    <th style="text-align:center;">Ações</th>
+                                    <th class="text-right">Criado em</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for kit in ultimos_kits %}
+                                <tr>
+                                    <td>
+                                        <div style="display:flex; flex-direction:column; gap:4px;">
+                                            <span class="sc kit truncate-title" title="{{ kit.sku_kit }}" style="width:fit-content; max-width: 140px;"><i class="fa-solid fa-layer-group"></i>{{ kit.sku_kit }}</span>
+                                            <span class="truncate-title" style="font-size:10px; color:var(--muted); max-width: 140px;"><i class="fa-solid fa-arrow-turn-up fa-rotate-90" style="margin-right: 4px;"></i> de {{ kit.sku_origem }}</span>
+                                        </div>
+                                    </td>
+                                    <td style="text-align:center;">
+                                        <div style="display:flex; justify-content:center; align-items:center; gap:8px;">
+                                            <a href="https://panel-u.baselinker.com/inventory_bundles#product:{{ kit.id_kit }}#tab:general"
+                                               target="_blank" class="btn-action-view" title="Ver no BaseLinker">
+                                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                            </a>
+                                            <form method="POST" style="margin:0; display:inline;" data-sku="{{ kit.sku_kit }}" onsubmit="return confirmarExclusaoIndividual(event, this.dataset.sku)">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="acao" value="excluir_individual">
+                                                <input type="hidden" name="id_kit" value="{{ kit.id_kit }}">
+                                                <input type="hidden" name="sku_kit" value="{{ kit.sku_kit }}">
+                                                <button type="submit" class="btn-action-delete" title="Excluir produto e liberar SKU">
+                                                    <i class="fa-solid fa-trash-can"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                    <td class="text-right" style="font-size:11px; color:var(--muted);">{{ kit.criado_em|date:"d/m H:i" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                     {% else %}
-                        <div class="empty">
-                            <i class="fa-solid fa-wand-magic-sparkles" style="font-size: 28px; color: var(--muted); margin-bottom: 12px; display: block; opacity: 0.3;"></i>
-                            <p style="font-size: 13px; color: var(--muted); font-weight: 500;">Aguardando produto...</p>
-                            <p style="font-size: 11px; color: var(--muted); margin-top: 6px; max-width: 200px; margin-left: auto; margin-right: auto;">Preencha o SKU principal na esquerda e clique em Analisar Produto.</p>
-                        </div>
+                    <div class="empty" style="padding: 30px;">
+                        <i class="fa-solid fa-box-open" style="font-size: 28px; color: var(--muted); margin-bottom: 12px; display: block; opacity: 0.3;"></i>
+                        <p style="font-size: 13px; color: var(--muted); font-weight: 500;">Nenhum kit criado ainda.</p>
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -609,7 +534,7 @@
                                target="_blank" class="btn-action-view" title="Ver no BaseLinker">
                                 <i class="fa-solid fa-arrow-up-right-from-square"></i>
                             </a>
-                            <form method="POST" style="margin:0; display:inline;" onsubmit="return confirmarExclusaoIndividual(event, '{{ kit.sku_kit }}')">
+                            <form method="POST" style="margin:0; display:inline;" data-sku="{{ kit.sku_kit }}" onsubmit="return confirmarExclusaoIndividual(event, this.dataset.sku)">
                                 {% csrf_token %}
                                 <input type="hidden" name="acao" value="excluir_individual">
                                 <input type="hidden" name="id_kit" value="{{ kit.id_kit }}">
@@ -640,7 +565,7 @@
         <div class="spinner" style="width: 45px; height: 45px; border-width: 3px; border-top-color: var(--cyan); margin: 0 auto 24px auto;"></div>
         <h3 style="font-family: var(--fh); font-size: 19px; color: var(--text); margin-bottom: 10px; font-weight: 800;">Criando Grade de Anúncios</h3>
         <p style="font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.6;">
-            O sistema está gerando os 8 anúncios no BaseLinker e registrando os EANs/GTINs oficiais na GS1 Brasil de forma resiliente. Este processo pode levar até 30 segundos.
+            O sistema está gerando os anúncios no BaseLinker e registrando os EANs/GTINs oficiais na GS1 Brasil de forma resiliente. Este processo pode levar até 30 segundos.
         </p>
         <button id="btn-cancelar-criacao" type="button" class="sc btn-action-delete" style="padding: 10px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; height: 38px; width: 100%;">
             <i class="fa-solid fa-circle-stop" style="font-size: 14px;"></i> Parar Criação e Excluir GTINs
@@ -655,28 +580,75 @@
 // Toggle Kit Misto
 document.getElementById('chk-misto').addEventListener('change', function() {
     const campo = document.getElementById('campo-sku-secundario');
-    const sku2  = document.getElementById('sku-sec');
+    const inputs = document.querySelectorAll('.sku-sec-input');
     if (this.checked) {
         campo.classList.add('visivel');
-        sku2.required = true;
+        inputs.forEach(inp => inp.required = false);
+        const firstInput = document.querySelector('.sku-sec-input');
+        if (firstInput) firstInput.required = true;
     } else {
         campo.classList.remove('visivel');
-        sku2.required = false;
-        sku2.value = '';
+        inputs.forEach(inp => {
+            inp.required = false;
+            inp.value = '';
+        });
+        const container = document.getElementById('container-skus-secundarios');
+        while (container.children.length > 1) {
+            container.removeChild(container.lastChild);
+        }
     }
 });
 
-// Loading no botão de Analisar
-document.getElementById('form-analisar').addEventListener('submit', function(e) {
-    const inp = document.getElementById('sku-inp');
-    if (!inp.value.trim()) { e.preventDefault(); return; }
-    const btn = document.getElementById('btn-analisar');
-    if(btn) {
-        btn.disabled = true; // Prevenção de duplo clique
-        btn.classList.add('loading');
-        btn.innerHTML = '<div class="spinner"></div> Analisando...';
+// Dynamic SKU addition
+document.getElementById('btn-add-sku-sec').addEventListener('click', function() {
+    const container = document.getElementById('container-skus-secundarios');
+    const count = container.querySelectorAll('.sku-sec-input').length;
+    if (count >= 4) {
+        alert("Limite máximo de 4 SKUs secundários (5 produtos no total) atingido.");
+        return;
+    }
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'input-secundario-wrapper';
+    wrapper.style.display = 'flex';
+    wrapper.style.gap = '8px';
+    wrapper.style.alignItems = 'center';
+    wrapper.style.marginTop = '8px';
+    wrapper.innerHTML = `
+        <input type="text" name="sku_secundario" class="fi sku-sec-input" placeholder="Ex: 3056${6 + count}" autocomplete="off" required>
+        <button type="button" class="btn-action-delete btn-remove-sku-sec" style="flex-shrink:0; width:38px; height:38px;" title="Remover">
+            <i class="fa-solid fa-trash-can"></i>
+        </button>
+    `;
+    container.appendChild(wrapper);
+});
+
+document.getElementById('container-skus-secundarios').addEventListener('click', function(e) {
+    if (e.target.closest('.btn-remove-sku-sec')) {
+        const container = document.getElementById('container-skus-secundarios');
+        const count = container.querySelectorAll('.sku-sec-input').length;
+        if (count <= 1) {
+            alert("Pelo menos um SKU secundário é necessário para Kit Misto.");
+            return;
+        }
+        e.target.closest('.input-secundario-wrapper').remove();
     }
 });
+
+// Loading no botão de Analisar (protegido)
+const formAnalisar = document.getElementById('form-analisar');
+if (formAnalisar) {
+    formAnalisar.addEventListener('submit', function(e) {
+        const inp = document.getElementById('sku-inp');
+        if (!inp.value.trim()) { e.preventDefault(); return; }
+        const btn = document.getElementById('btn-analisar');
+        if(btn) {
+            btn.disabled = true; // Prevenção de duplo clique
+            btn.classList.add('loading');
+            btn.innerHTML = '<div class="spinner"></div> Analisando...';
+        }
+    });
+}
 
 // Exibição do Modal de Loading Premium com suporte a Interrupção e Exclusão na GS1
 const formCriacao = document.getElementById('form-criacao');
@@ -688,6 +660,8 @@ if (formCriacao) {
             overlay.style.display = 'flex';
             overlay.style.opacity = '1';
         }
+        // Inicia o timeout de segurança de 15 minutos
+        iniciarTimeoutOverlay();
 
         // Configura o clique no botão de interrupção
         const btnCancelar = document.getElementById('btn-cancelar-criacao');
@@ -730,6 +704,28 @@ if (formCriacao) {
             });
         }
     });
+}
+
+// Timeout de segurança do overlay de loading (15 minutos)
+// Evita que o overlay fique travado se o servidor cair ou demorar demais
+let _overlayTimeoutId = null;
+const _OVERLAY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutos
+
+function iniciarTimeoutOverlay() {
+    _overlayTimeoutId = setTimeout(function() {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay && overlay.style.display !== 'none') {
+            overlay.style.display = 'none';
+            console.warn('Overlay de loading fechado por timeout de segurança (15 min).');
+        }
+    }, _OVERLAY_TIMEOUT_MS);
+}
+
+function cancelarTimeoutOverlay() {
+    if (_overlayTimeoutId) {
+        clearTimeout(_overlayTimeoutId);
+        _overlayTimeoutId = null;
+    }
 }
 
 // Auto-dismiss alerts
@@ -778,6 +774,48 @@ function confirmarExclusaoIndividual(e, sku) {
     }
     return true;
 }
+
+// Limpa os dados do formulário esquerdo caso tenhamos acabado de criar um kit com sucesso
+document.addEventListener('DOMContentLoaded', function() {
+    const alerts = document.querySelectorAll('.alert.as');
+    let sucessoCriacao = false;
+    alerts.forEach(function(alert) {
+        if (alert.textContent.includes('criada com sucesso') || alert.textContent.includes('criado com sucesso')) {
+            sucessoCriacao = true;
+        }
+    });
+    
+    if (sucessoCriacao) {
+        // Zera o formulário de análise
+        const formAnalisar = document.getElementById('form-analisar');
+        if (formAnalisar) {
+            formAnalisar.reset();
+            // Limpa manualmente para contornar autocomplete agressivo de alguns navegadores
+            formAnalisar.querySelectorAll('input[type="text"], input[type="url"]').forEach(function(input) {
+                input.value = '';
+            });
+            // Desmarca os checkboxes
+            formAnalisar.querySelectorAll('input[type="checkbox"]').forEach(function(chk) {
+                chk.checked = false;
+            });
+            // Oculta SKU secundário
+            const campoSec = document.getElementById('campo-sku-secundario');
+            if (campoSec) {
+                campoSec.classList.remove('visivel');
+            }
+        }
+        
+        // Também garante que os inputs de hidden do form-criacao sejam limpos
+        const formCriacao = document.getElementById('form-criacao');
+        if (formCriacao) {
+            formCriacao.querySelectorAll('input[type="hidden"]').forEach(function(input) {
+                if (input.name !== 'csrfmiddlewaretoken' && input.name !== 'acao') {
+                    input.value = '';
+                }
+            });
+        }
+    }
+});
 </script>
 </body>
 </html>

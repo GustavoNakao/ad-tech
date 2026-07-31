@@ -59,11 +59,20 @@ class BaselinkerClient:
         result = self._request("getOrders", {"date_from": date_from})
         return result.get("orders", [])
 
-    def obter_mapa_tags(self) -> Dict[str, Any]:
+    def obter_mapa_tags(self, forcar_recarga: bool = False) -> Dict[str, Any]:
         """
         Busca as tags do inventário e cria um dicionário {nome_tag_lower: tag_id_ou_nome}.
-        Suporta tanto o formato de lista (visto em contas BR) quanto o de dict.
+        Utiliza cache persistente do Django de 24 horas para evitar requisições redundantes.
         """
+        from django.core.cache import cache
+        cache_key = "baselinker_mapa_tags"
+        
+        if not forcar_recarga:
+            cached_mapa = cache.get(cache_key)
+            if cached_mapa is not None:
+                logger.debug("Retornando mapa de tags do BaseLinker a partir do cache")
+                return cached_mapa
+
         try:
             resp = self._request("getInventoryTags", {})
             tags_brutas = resp.get("tags", [])
@@ -81,17 +90,38 @@ class BaselinkerClient:
                     nome = str(dados.get("name", "")).strip().lower()
                     if nome:
                         mapa[nome] = int(tag_id)
+            
+            cache.set(cache_key, mapa, timeout=86400) # Cache por 24 horas
+            logger.info("Mapa de tags carregado da API BaseLinker e cacheado por 24h.")
             return mapa
         except Exception as exc:
             logger.error("Falha ao mapear tags do BaseLinker: %s", str(exc), exc_info=True)
             return {}
 
-    def get_inventory_categories(self, inventory_id: Optional[int] = None) -> List[dict]:
+    def get_inventory_categories(self, inventory_id: Optional[int] = None, forcar_recarga: bool = False) -> List[dict]:
+        """
+        Busca as categorias do inventário e utiliza cache persistente do Django de 24 horas.
+        """
+        from django.core.cache import cache
+        cache_key = f"baselinker_categories_{inventory_id or 'default'}"
+        
+        if not forcar_recarga:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                logger.debug("Retornando categorias do BaseLinker a partir do cache")
+                return cached
+
         parameters = {}
         if inventory_id is not None:
             parameters["inventory_id"] = inventory_id
-        result = self._request("getInventoryCategories", parameters)
-        return result.get("categories", [])
+        try:
+            result = self._request("getInventoryCategories", parameters)
+            categories = result.get("categories", [])
+            cache.set(cache_key, categories, timeout=86400) # Cache por 24 horas
+            return categories
+        except Exception as e:
+            logger.error("Erro ao obter categorias do BaseLinker: %s", e)
+            return []
 
     def addInventoryCategory(self, inventory_id: int, name: str, parent_id: int = 0) -> Optional[int]:
         """
@@ -106,22 +136,60 @@ class BaselinkerClient:
         try:
             resp = self._request("addInventoryCategory", params)
             if resp.get("status") == "SUCCESS":
+                # Invalida o cache de categorias ao criar uma nova
+                from django.core.cache import cache
+                cache.delete(f"baselinker_categories_{inventory_id}")
+                cache.delete("baselinker_categories_default")
                 return resp.get("category_id")
             return None
         except Exception as e:
             logger.error("BaseLinker addInventoryCategory erro: %s", e)
             return None
 
-    def get_inventory_warehouses(self) -> dict:
-        return self._request("getInventoryWarehouses")
+    def get_inventory_warehouses(self, forcar_recarga: bool = False) -> dict:
+        """
+        Busca os armazéns do catálogo e utiliza cache persistente de 24 horas.
+        """
+        from django.core.cache import cache
+        cache_key = "baselinker_warehouses"
+        
+        if not forcar_recarga:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                logger.debug("Retornando armazéns do BaseLinker a partir do cache")
+                return cached
 
-    def get_inventory_price_groups(self) -> List[dict]:
+        try:
+            result = self._request("getInventoryWarehouses")
+            cache.set(cache_key, result, timeout=86400) # Cache por 24 horas
+            return result
+        except Exception as e:
+            logger.error("Erro ao obter armazéns do BaseLinker: %s", e)
+            return {}
+
+    def get_inventory_price_groups(self, forcar_recarga: bool = False) -> List[dict]:
         """
         Retorna a lista de grupos de preços (tabelas) do BaseLinker.
         Útil para identificar o ID do 'Preço Padrão (BRL)'.
+        Utiliza cache persistente de 24 horas.
         """
-        result = self._request("getInventoryPriceGroups")
-        return result.get("price_groups", [])
+        from django.core.cache import cache
+        cache_key = "baselinker_price_groups"
+        
+        if not forcar_recarga:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                logger.debug("Retornando grupos de preços do BaseLinker a partir do cache")
+                return cached
+
+        try:
+            result = self._request("getInventoryPriceGroups")
+            price_groups = result.get("price_groups", [])
+            cache.set(cache_key, price_groups, timeout=86400) # Cache por 24 horas
+            return price_groups
+        except Exception as e:
+            logger.error("Erro ao obter grupos de preços do BaseLinker: %s", e)
+            return []
 
     @staticmethod
     def _extrair_ncm(features_internas: dict, text_fields: dict) -> str:
@@ -235,19 +303,34 @@ class BaselinkerClient:
             imgs_raw = dados.get("images", {})
             logger.info("SKU %s | images bruto do BaseLinker: %r", sku, imgs_raw)
             if isinstance(imgs_raw, dict) and imgs_raw:
-                primeira_img = list(imgs_raw.values())[0]
-                logger.info("SKU %s | primeira_img bruta: %r", sku, primeira_img)
-                if isinstance(primeira_img, str):
-                    # Formato "url:https://..." ou "url:http://..."
-                    if primeira_img.startswith("url:"):
-                        imagem_url = primeira_img[4:].strip()
-                    # Formato direto "https://..."
-                    elif primeira_img.startswith("http"):
-                        imagem_url = primeira_img.strip()
-                elif isinstance(primeira_img, dict):
-                    # Alguns endpoints retornam {"url": "https://..."}
-                    imagem_url = (primeira_img.get("url") or primeira_img.get("src") or "").strip()
+                lista_urls = []
+                for v in imgs_raw.values():
+                    url_limpa = ""
+                    if isinstance(v, str):
+                        if v.startswith("url:"):
+                            url_limpa = v[4:].strip()
+                        elif v.startswith("http"):
+                            url_limpa = v.strip()
+                    elif isinstance(v, dict):
+                        url_limpa = (v.get("url") or v.get("src") or "").strip()
+                    if url_limpa:
+                        lista_urls.append(url_limpa)
+
+                # Prioriza imagens que não sejam .webp
+                url_selecionada = ""
+                for u in lista_urls:
+                    path_part = u.split("?")[0].lower()
+                    if not path_part.endswith(".webp") and ".webp" not in path_part:
+                        url_selecionada = u
+                        break
+
+                # Se não encontrou nenhuma não-webp, usa a primeira
+                if not url_selecionada and lista_urls:
+                    url_selecionada = lista_urls[0]
+
+                imagem_url = url_selecionada
             logger.info("SKU %s | imagem_url final extraída: %r", sku, imagem_url)
+
 
             return {
                 "id_produto":      id_produto,

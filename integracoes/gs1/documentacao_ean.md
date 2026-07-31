@@ -447,4 +447,28 @@ O uso de `get_or_create` é **intencional e obrigatório**. Garante idempotênci
 
 ---
 
+## 13. Variáveis de Ambiente e Resiliência
+
+### 13.1 Variáveis de Ambiente (.env)
+- `GS1_API_TIMEOUT` (int, default: 30): Tempo limite em segundos para chamadas de requisição HTTP na API GS1.
+
+### 13.2 Mecanismo de Retry (Tenacity)
+- Toda chamada externa POST para a GS1 está equipada com a política de retry automático utilizando `tenacity` com **backoff exponencial** (mínimo de 4 segundos, máximo de 15 segundos, e limite de 3 tentativas). Erros transitórios HTTP 5xx (500, 502, 503, 504) e o erro HTTP 403 (Access Denied / Rate Limit do Akamai) disparam retries automáticos.
+- **Atualização em 17/06/2026:** Para mitigar erros de autenticação ou expiração prematura no servidor GS1, quando um erro HTTP 403 é detectado, o sistema limpa o token de acesso cacheado localmente e obtém um novo token, atualizando os cabeçalhos da sessão antes do início do retry.
+
+---
+
+## 14. Pacote Exportado Autônomo (Standalone Exporter)
+
+Exportado em `exports/export_gs1/`, permitindo o funcionamento independente do framework Django:
+
+- `client_gs1.py`: Cliente HTTP da API GS1 Brasil (CNP API v2/v3).
+- `client_baselinker.py`: Cliente HTTP da API do BaseLinker.
+- `gerador_ean.py`: Orquestrador de serviços e CLI (`python gerador_ean.py --sku SKU --gpc GPC`).
+- `web_app.py`: Servidor HTTP autônomo (`python web_app.py`).
+- `templates/gerar_ean.html`: Interface web responsiva com glassmorphism, suporte a cópia de GTIN e tratamentos visuais.
+
+---
+
 > 💬 **Dúvidas?** Consulte o líder técnico antes de implementar qualquer variação das regras acima. Este documento é a fonte da verdade para o módulo de anúncios.
+

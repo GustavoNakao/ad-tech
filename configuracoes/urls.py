@@ -1,18 +1,19 @@
 from django.contrib import admin
 from django.urls import path, include
-from django.shortcuts import redirect
+from django.views.generic import RedirectView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    
-    # A sua rota principal que já funcionava antes:
-    path('', include('criacao_estruturado.urls')), 
-    
-    # A NOSSA NOVA ROTA AQUI:
+
+    # Redireciona a raiz '/' para '/gerador-kits/'
+    path('', RedirectView.as_view(url='/gerador-kits/', permanent=False)),
+
+    # Rotas principais
+    path('', include('criacao_estruturado.urls')),
+
+    # App de produtos
     path('produtos/', include('produtos.urls')),
-    
-    path("", include("core.urls")), 
-    
-    path('', lambda request: redirect('painel_kits'), name='home'),
-    
-    ]
+
+    # Core (login, logout, acesso negado)
+    path('', include('core.urls')),
+]

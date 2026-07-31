@@ -5,6 +5,12 @@ Este repositório contém o sistema de automação para criação de kits e inte
 ## Visão Geral
 O sistema automatiza a criação de grades de anúncios, otimização de títulos com IA, registro de EAN na GS1 e precificação dinâmica através do Motor R831.
 
+## 📦 Pacote Exportado Autônomo GS1 (`exports/export_gs1/`)
+Exportação completa e autônoma do módulo de consulta de SKU no BaseLinker, autogeração de EAN/GTIN oficial na GS1 Brasil e sincronização automática. Pode ser executado de duas formas:
+- **Interface Web Autônoma (Página HTML):** `python exports/export_gs1/web_app.py` → [http://localhost:8000](http://localhost:8000)
+- **Linha de Comando (CLI):** `python exports/export_gs1/gerador_ean.py --sku "R831-001" --gpc "10000456"`
+
+
 ---
 
 # Documentação Técnica — Módulo `criacao_estruturado`

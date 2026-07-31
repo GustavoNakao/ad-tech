@@ -158,4 +158,11 @@ O sistema registra o protocolo aplicado no campo de log/comentário do banco de 
 
 ---
 
+## 13. Atualizações e Ajustes Técnicos (Sprint 2)
+### Atualizado em 2026-05-27
+- **Fim dos Valores Hardcoded no Hysteresis (M7)**: Os limites e o teto da lógica de Hysteresis (anteriormente `72.00` e `79.00`) foram substituídos por referências dinâmicas aos parâmetros ativos salvos no banco de dados (`cfg.piso_frete_gratis` e calculando limites com base nele). Isso garante que mudanças no admin reflitam imediatamente no motor de cálculo Greenfield.
+- **Constraint de Singleton em RegrasPrecificacao (M9)**: Foi adicionada a restrição `UniqueConstraint(fields=["ativo"], condition=Q(ativo=True), name="unico_regra_precificacao_ativa")` no modelo `RegrasPrecificacao` para garantir, a nível de banco de dados, que apenas um conjunto de regras possa estar ativo a qualquer momento.
+
+---
+
 *Fim da Documentação — Motor de Precificação R831 v4.3*

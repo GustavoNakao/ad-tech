@@ -175,21 +175,21 @@ class PricingEngine:
         self.config = config or ConfigEngine()
 
     def calcular_grade(
-        self, dados: Dict[str, Any], sku_ref: str = "???", custo_saida_transportadora: Optional[float] = None, vendas_60_dias: int = 0
+        self, dados: Dict[str, Any], sku_ref: str = "???", custo_saida_transportadora: Optional[float] = None, vendas_60_dias: int = 0, limite_unidades: int = 4
     ) -> ResultadoGrade:
-        """Calcula a grade de 8 anúncios para um SKU."""
+        """Calcula a grade de anúncios para um SKU."""
         # Sobrescreve vendas na config se passado
         self.config.vendas_60_dias = vendas_60_dias
         
         custo = self._extrair_custo(dados)
         peso = self._calcular_peso_efetivo(dados)
         tax, tax_erros = self._extrair_tax_rate_validado(dados)
-
+ 
         bloq = self._validar_entrada(custo, peso, tax_erros, custo_saida_transportadora, sku_ref)
         if bloq:
             return ResultadoGrade(sku=sku_ref, anuncios=[], bloqueado=True, motivo_bloqueio=bloq)
-
-        anuncios = self._gerar_anuncios(custo, tax, peso, sku_ref, custo_saida_transportadora)
+ 
+        anuncios = self._gerar_anuncios(custo, tax, peso, sku_ref, custo_saida_transportadora, limite_unidades)
         return ResultadoGrade(sku=sku_ref, anuncios=anuncios)
 
     def _validar_entrada(self, c: float, p: float, te: List[str], ct: Optional[float], s: str) -> Optional[str]:
@@ -200,15 +200,18 @@ class PricingEngine:
         if te: return f"Erros no tax_rate: {te}"
         return None
 
-    def _gerar_anuncios(self, c: float, t: float, p: float, s: str, ct: Optional[float]) -> List[ResultadoAnuncio]:
-        """Loop de geração dos 8 anúncios."""
+    def _gerar_anuncios(self, c: float, t: float, p: float, s: str, ct: Optional[float], limite_unidades: int = 4) -> List[ResultadoAnuncio]:
+        """Loop de geração dos anúncios da grade."""
         res = []
         combs = [
             (1, ModalidadeAnuncio.CLASSICO, "unit_1_classico"), (1, ModalidadeAnuncio.PREMIUM, "unit_1_premium"),
             (2, ModalidadeAnuncio.CLASSICO, "unit_2_classico"), (2, ModalidadeAnuncio.PREMIUM, "unit_2_premium"),
             (3, ModalidadeAnuncio.CLASSICO, "unit_3_classico"), (3, ModalidadeAnuncio.PREMIUM, "unit_3_premium"),
-            (4, ModalidadeAnuncio.CLASSICO, "unit_4_classico"), (4, ModalidadeAnuncio.PREMIUM, "unit_4_premium"),
         ]
+        if limite_unidades >= 4:
+            combs.extend([
+                (4, ModalidadeAnuncio.CLASSICO, "unit_4_classico"), (4, ModalidadeAnuncio.PREMIUM, "unit_4_premium"),
+            ])
         for q, m, r in combs:
             res.append(self._calcular_anuncio(c, t, p, q, m, r, s, ct))
             
@@ -291,20 +294,20 @@ class PricingEngine:
             vit_com = _arredondar_teto(prom_com / (1 - cfg.desconto_vitrine))
             
             # Lógica de decisão
-            if vit_sem >= 79.00:
-                # Se sem taxa já fica >= 79, usamos esse preço (naturalmente fora da zona morta)
+            if vit_sem >= cfg.piso_frete_gratis:
+                # Se sem taxa já fica >= piso, usamos esse preço (naturalmente fora da zona morta)
                 vit, prom, c_log, num = vit_sem, prom_sem, c_log_sem, num_sem
-                logger.info("%s - Naturalmente >= 79 para SKU %s", audit_tag, sku)
-            elif 72.00 <= vit_sem <= 78.99:
-                # Caso clássico: o preço sem taxa cairia na zona morta se não houvesse a regra,
-                # ou cairia abaixo de 79 e forçaria a taxa. Saltamos para 79.
-                vit, prom, c_log, num = 79.00, _arredondar_teto(79.00 * (1 - cfg.desconto_vitrine)), c_log_sem, num_sem
-                audit_tag += " - SALTO 79"
-                logger.info("%s - Salto 79 (via vit_sem) para SKU %s", audit_tag, sku)
+                logger.info("%s - Naturalmente >= %.2f para SKU %s", audit_tag, cfg.piso_frete_gratis, sku)
+            elif (cfg.piso_frete_gratis - 7) <= vit_sem < cfg.piso_frete_gratis:
+                # Caso clássico: o preço sem taxa cairia na zona morta (< piso).
+                # Saltamos para o piso de frete grátis.
+                vit, prom, c_log, num = cfg.piso_frete_gratis, _arredondar_teto(cfg.piso_frete_gratis * (1 - cfg.desconto_vitrine)), c_log_sem, num_sem
+                audit_tag += " - SALTO PISO"
+                logger.info("%s - Salto piso (via vit_sem) para SKU %s", audit_tag, sku)
             else:
-                # Caso contrário, usamos o preço com taxa (preço baixo < 72)
+                # Caso contrário, usamos o preço com taxa (preço baixo < piso - 7)
                 vit, prom, c_log, num = vit_com, prom_com, c_log_com, num_com
-                logger.info("%s - Preço Baixo (< 72) para SKU %s", audit_tag, sku)
+                logger.info("%s - Preço Baixo (< %.2f) para SKU %s", audit_tag, cfg.piso_frete_gratis - 7, sku)
         else:
             # Lógica Patrimônio Original
             c_log = self._obter_frete_estimado(c_kit, den, peso, qtd, trans, c_bl, c_gnre)
@@ -409,7 +412,9 @@ class PricingEngine:
             from precificacao.models.regras import TabelaFreteMercadoEnvios
             ent = TabelaFreteMercadoEnvios.objects.filter(peso_min_kg__lte=p, peso_max_kg__gte=p, ativo=True).first()
             return float(ent.custo_tabela) if ent else 18.0
-        except: return 18.0
+        except Exception:
+            logger.warning("Falha ao consultar tabela de frete no banco, usando fallback R$18,00")
+            return 18.0
 
     def _extrair_custo(self, d: Dict) -> float:
         """Extrai o custo base do dicionário do BaseLinker."""
@@ -429,7 +434,8 @@ class PricingEngine:
             if round(v_dec * 100, 2) not in TAX_RATES_VALIDOS:
                 return 0.0, [f"Tax {v_dec*100}% inválido"]
             return v_dec, []
-        except: return 0.0, ["Tax não numérico"]
+        except (ValueError, TypeError, AttributeError):
+            return 0.0, ["Tax não numérico"]
 
     def _bloqueio_denominador(self, r, q, m, d, c, t, p) -> ResultadoAnuncio:
         """Gera objeto de erro quando denominador explode."""
@@ -443,7 +449,8 @@ def _para_float(v: Any) -> Optional[float]:
     try:
         s = str(v).replace("R$", "").replace(" ", "").replace(".", "").replace(",", ".")
         return float(s)
-    except: return None
+    except (ValueError, TypeError, AttributeError):
+        return None
 
 
 def _arredondar_teto(v: float) -> float:

@@ -1,68 +1,360 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Gerador EAN | R831</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador EAN GS1 Brasil | Só Produto R831</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f7f6; padding: 40px; }
-        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; font-weight: bold; margin-bottom: 5px; }
-        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background: #0056b3; color: white; padding: 12px 20px; border: none; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; border-radius: 4px; }
-        button:hover { background: #004494; }
-        .erro { background: #fee2e2; color: #991b1b; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
-        .erro small { display: block; margin-top: 6px; font-size: 12px; opacity: 0.8; }
-        .sucesso { background: #dcfce7; color: #166534; padding: 20px; border-radius: 4px; margin-top: 20px; text-align: center; }
-        .ean-destaque { font-size: 28px; font-weight: bold; font-family: monospace; letter-spacing: 3px; display: block; margin: 10px 0; }
-        .badge { background: #e0e7ff; color: #3730a3; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-        .info-row { font-size: 12px; color: #555; margin-top: 8px; }
+        :root {
+            --bg-primary: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --border-card: rgba(255, 255, 255, 0.1);
+            --accent-blue: #3b82f6;
+            --accent-blue-hover: #2563eb;
+            --accent-cyan: #06b6d4;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --success-bg: rgba(16, 185, 129, 0.15);
+            --success-border: rgba(16, 185, 129, 0.3);
+            --success-text: #34d399;
+            --error-bg: rgba(239, 68, 68, 0.15);
+            --error-border: rgba(239, 68, 68, 0.3);
+            --error-text: #f87171;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background: #090d16;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.15) 0px, transparent 50%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            color: var(--text-main);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 540px;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            border-radius: 20px;
+            padding: 36px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .brand-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 9999px;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #60a5fa;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 6px;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            color: var(--text-main);
+            font-size: 15px;
+            transition: all 0.2s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        input::placeholder {
+            color: #475569;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-cyan) 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.45);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+        }
+
+        .alert {
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            line-height: 1.5;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .alert-error {
+            background: var(--error-bg);
+            border: 1px solid var(--error-border);
+            color: var(--error-text);
+        }
+
+        .result-card {
+            margin-top: 28px;
+            background: var(--success-bg);
+            border: 1px solid var(--success-border);
+            border-radius: 14px;
+            padding: 24px;
+            text-align: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .result-title {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .product-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 16px;
+        }
+
+        .gtin-box {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px dashed rgba(52, 211, 153, 0.4);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .gtin-code {
+            font-family: monospace;
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: var(--success-text);
+        }
+
+        .btn-copy {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: var(--text-main);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: background 0.2s;
+        }
+
+        .btn-copy:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .meta-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .badge-info {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 4px 10px;
+            border-radius: 6px;
+            color: #cbd5e1;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success-text);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>🏭 Gerador de EAN R831</h2>
+<div class="container">
+    <div class="header">
+        <div class="brand-badge">⚡ GS1 Brasil & BaseLinker</div>
+        <h1>Gerador Oficial de GTIN</h1>
+        <p>Crie códigos EAN autênticos sincronizados no BaseLinker</p>
+    </div>
 
     {% if erro %}
-    <div class="erro">
-        <strong>⚠️ Bloqueado:</strong> {{ erro }}
-        <small>Corrija o cadastro no BaseLinker e tente novamente.</small>
+    <div class="alert alert-error">
+        <span>⚠️</span>
+        <div>
+            <strong>Falha no Processamento:</strong><br>
+            {{ erro }}
+        </div>
     </div>
     {% endif %}
 
-    <form method="POST">
+    <form method="POST" id="eanForm" onsubmit="showLoading()">
         {% csrf_token %}
         <div class="form-group">
-            <label>SKU no BaseLinker:</label>
-            <input type="text" name="sku" value="{{ request.POST.sku }}" required placeholder="Ex: R831-001">
+            <label for="sku">SKU do Produto no BaseLinker</label>
+            <input type="text" id="sku" name="sku" value="{{ request.POST.sku }}" required placeholder="Ex: R831-001" autocomplete="off">
         </div>
+
         <div class="form-group">
-            <label>Código GPC:</label>
-            <input type="number" name="gpc" value="{{ request.POST.gpc }}" required placeholder="Ex: 10000456">
+            <label for="gpc">Código GPC GS1 (Global Product Classification)</label>
+            <input type="number" id="gpc" name="gpc" value="{{ request.POST.gpc }}" required placeholder="Ex: 10000456" autocomplete="off">
         </div>
-        <button type="submit">⚡ Gerar EAN</button>
+
+        <button type="submit" class="btn-submit" id="btnSubmit">
+            <span class="spinner" id="spinner"></span>
+            <span id="btnText">⚡ Gerar e Sincronizar EAN</span>
+        </button>
     </form>
 
     {% if resultado %}
-    <div class="sucesso">
-        <small>{{ resultado.nome }}</small><br>
-        <span class="ean-destaque">{{ resultado.ean }}</span>
+    <div class="result-card">
+        <div class="result-title">Produto Identificado</div>
+        <div class="product-name">{{ resultado.nome }}</div>
 
-        <div class="info-row">NCM: <strong>{{ resultado.ncm }}</strong></div>
+        <div class="gtin-box">
+            <div class="gtin-code" id="gtinCode">{{ resultado.ean }}</div>
+            <button class="btn-copy" onclick="copyGTIN()">📋 Copiar GTIN</button>
+        </div>
 
-        {% if resultado.foto_enviada %}
-            <span class="badge">📸 Foto sincronizada na GS1</span><br><br>
-        {% endif %}
-
-        {% if resultado.salvo_bl %}
-            <strong>✅ Salvo automaticamente no BaseLinker!</strong>
-        {% else %}
-            <strong style="color: #991b1b;">⚠️ Falha ao salvar no BaseLinker. Salve manualmente o EAN: {{ resultado.ean }}</strong>
-        {% endif %}
+        <div class="meta-badges">
+            <span class="badge-info">NCM: <strong>{{ resultado.ncm }}</strong></span>
+            {% if resultado.foto_enviada %}
+                <span class="badge-success">📸 Foto GS1 OK</span>
+            {% endif %}
+            {% if resultado.salvo_bl %}
+                <span class="badge-success">✅ Salvo no BaseLinker</span>
+            {% else %}
+                <span class="badge-warning">⚠️ Salve Manualmente no BL</span>
+            {% endif %}
+        </div>
     </div>
     {% endif %}
 </div>
+
+<script>
+    function showLoading() {
+        document.getElementById('btnSubmit').disabled = true;
+        document.getElementById('spinner').style.display = 'inline-block';
+        document.getElementById('btnText').innerText = 'Gerando na GS1...';
+    }
+
+    function copyGTIN() {
+        const gtin = document.getElementById('gtinCode').innerText;
+        navigator.clipboard.writeText(gtin).then(() => {
+            alert('GTIN ' + gtin + ' copiado para a área de transferência!');
+        });
+    }
+</script>
 
 </body>
 </html>

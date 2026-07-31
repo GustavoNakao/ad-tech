@@ -6,6 +6,7 @@ from typing import Optional
 from curl_cffi import requests
 from decouple import config
 from django.core.exceptions import ImproperlyConfigured
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class GS1Client:
 
         self._access_token:     Optional[str] = None
         self._token_expires_at: float         = 0.0
+        self.TIMEOUT = config("GS1_API_TIMEOUT", default=30, cast=int)
 
     def _is_token_valid(self) -> bool:
         return bool(self._access_token) and time.time() < self._token_expires_at
@@ -50,9 +52,9 @@ class GS1Client:
 
         logger.debug(
             "GS1 Auth tentando | username=%s | password=%s | client_id=%s",
-            self._username,
-            "*" * len(self._password) if self._password else "VAZIO",
-            self._client_id,
+            "[REDACTED]",
+            "*" * 8,
+            self._client_id[:8] + "..." if self._client_id else "VAZIO",
         )
 
         try:
@@ -72,7 +74,11 @@ class GS1Client:
             raise GS1AuthError(f"Falha na autenticação GS1: {body}") from e
 
         data = response.json()
-        self._access_token     = data["access_token"]
+        self._access_token = data.get("access_token")
+        if not self._access_token:
+            raise GS1AuthError(
+                f"Token não retornado pela GS1. Resposta inesperada: {str(data)[:200]}"
+            )
         self._token_expires_at = time.time() + int(data.get("expires_in", 10800)) - 60
         logger.info("GS1 token obtido com sucesso. Expira em %.0f min.", (self._token_expires_at - time.time()) / 60)
 
@@ -138,6 +144,52 @@ class GS1Client:
             return None
 
         return _buscar_gtin(data)
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=4, max=15),
+        reraise=True
+    )
+    def _post_request_with_retry(self, session: requests.Session, url: str, json_data: dict) -> requests.Response:
+        """Realiza requisição POST com retry automático para erros transitórios de rede e HTTP 5xx/403."""
+        try:
+            response = session.post(url, json=json_data, timeout=self.TIMEOUT)
+            # Trata erros 5xx (Server Error) ou 403 (Access Denied / Rate Limit do Akamai)
+            # como falhas transitórias que disparam o retry.
+            if response.status_code in [403, 500, 502, 503, 504]:
+                logger.warning(
+                    "GS1 retornou status %s (possível rate limit ou erro temporário). Disparando retry...",
+                    response.status_code
+                )
+                if response.status_code == 403:
+                    logger.warning("Limpando token cacheado para forçar re-autenticação no retry devido a HTTP 403.")
+                    self._access_token = None
+                    self._token_expires_at = 0.0
+                    try:
+                        novo_token = self.get_token()
+                        session.headers.update({
+                            "Authorization": f"Bearer {novo_token}",
+                            "access_token":  novo_token,
+                        })
+                        logger.info("Novo token GS1 obtido e headers da sessão atualizados para o retry.")
+                    except Exception as e_auth:
+                        logger.error("Erro ao renovar token após 403: %s", e_auth)
+
+                from curl_cffi.requests.exceptions import HTTPError
+                raise HTTPError(f"HTTP Error {response.status_code} temporário", 0, response)
+            return response
+        except Exception as e:
+            from curl_cffi.requests.exceptions import HTTPError
+            if isinstance(e, HTTPError) and e.response is not None:
+                if e.response.status_code not in [403, 500, 502, 503, 504]:
+                    logger.error(
+                        "Erro permanente retornado pela GS1: status=%s. Abortando retries.",
+                        e.response.status_code
+                    )
+                    return e.response
+            
+            logger.warning("Erro de rede ou timeout na chamada GS1: %s. Tentando novamente...", str(e))
+            raise
 
     def gerar_ean_completo(self, dados_bl: dict, gpc: str) -> dict:
         session = self._session()
@@ -292,21 +344,64 @@ class GS1Client:
         logger.debug("GS1 payload enviado: %s", payload)
 
         try:
-            response = session.post(url, json=payload, timeout=self.TIMEOUT)
+            response = self._post_request_with_retry(session, url, payload)
 
             if response.status_code in [200, 201]:
                 data = response.json()
-                # Log COMPLETO — imprescindível para achar onde está o GTIN
                 logger.info("GS1 sucesso body COMPLETO: %s", response.text)
 
                 gtin = self._extrair_gtin(data)
+                
+                # Se a API retornou 200/201 mas com resultado de erro ou sem GTIN
+                if data.get("result") == "ERROR" or not gtin:
+                    error_info = data.get("errorInfo", {})
+                    validations = data.get("validations", [])
+                    if validations:
+                        msgs = " | ".join(v.get("message", "") for v in validations)
+                        erro_msg = f"Validação GS1: {msgs}"
+                    else:
+                        erro_msg = error_info.get("message") or data.get("message") or "Erro de validação no body"
+                    
+                    # Verificar se o erro é relacionado a download de imagem/arquivo
+                    erro_str = str(data).lower()
+                    if ("gs1-4200" in erro_str or 
+                        "download" in erro_str or 
+                        "save file" in erro_str or 
+                        "inacessível" in erro_str or 
+                        "image" in erro_str):
+                        
+                        fallback_img = config("GS1_IMAGE_FALLBACK", default="https://soproduto.com.br/favicon.png")
+                        if imagem_url and imagem_url != fallback_img:
+                            logger.warning(f"GS1 falhou no download da imagem {imagem_url}. Tentando fallback automático com {fallback_img}...")
+                            # Substituir a imagem no payload
+                            for ref in payload.get("referencedFileInformations", []):
+                                if ref.get("referencedFileTypeCode") == "OUT_OF_PACKAGE_IMAGE":
+                                    ref["uniformResourceIdentifier"] = fallback_img
+                                    ref["fileName"] = "logo.png"
+                            
+                            # Re-enviar a chamada
+                            response_retry = self._post_request_with_retry(session, url, payload)
+                            if response_retry.status_code in [200, 201]:
+                                data_retry = response_retry.json()
+                                logger.info("GS1 retry sucesso body: %s", response_retry.text)
+                                gtin_retry = self._extrair_gtin(data_retry)
+                                if gtin_retry and data_retry.get("result") != "ERROR":
+                                    logger.info("EAN gerado com sucesso após fallback de imagem: %s", gtin_retry)
+                                    return {"sucesso": True, "dados": {"gtin": gtin_retry, "raw": data_retry}}
+                                else:
+                                    erro_msg = f"Falhou no retry com fallback: {data_retry.get('message') or response_retry.text}"
+                            else:
+                                erro_msg = f"Falhou no retry status={response_retry.status_code}"
+                    
+                    return {"sucesso": False, "erro": f"GS1 Rejeitou ({response.status_code}): {erro_msg}"}
+
                 logger.info("GS1 GTIN extraido: %s", gtin)
                 return {"sucesso": True, "dados": {"gtin": gtin, "raw": data}}
 
+            # Caso HTTP status não seja 200/201 (ex: 400, 422, 500)
             logger.debug("GS1 resposta: status=%s | body=%s", response.status_code, response.text[:800])
             try:
-                body      = response.json()
-                # Tenta extrair mensagens de validação detalhadas
+                body = response.json()
                 validations = body.get("data", {}).get("validations", [])
                 if validations:
                     msgs = " | ".join(v.get("message", "") for v in validations)
@@ -315,6 +410,38 @@ class GS1Client:
                     erro_msg = body.get("message") or response.text
             except Exception:
                 erro_msg = response.text
+
+            # Verificar se o erro 422/400 é de download de imagem
+            erro_str_http = erro_msg.lower()
+            if ("gs1-4200" in erro_str_http or 
+                "download" in erro_str_http or 
+                "save file" in erro_str_http or 
+                "inacessível" in erro_str_http or 
+                "image" in erro_str_http):
+                
+                fallback_img = config("GS1_IMAGE_FALLBACK", default="https://soproduto.com.br/favicon.png")
+                if imagem_url and imagem_url != fallback_img:
+                    logger.warning(f"GS1 HTTP {response.status_code} falhou no download da imagem {imagem_url}. Tentando fallback automático com {fallback_img}...")
+                    for ref in payload.get("referencedFileInformations", []):
+                        if ref.get("referencedFileTypeCode") == "OUT_OF_PACKAGE_IMAGE":
+                            ref["uniformResourceIdentifier"] = fallback_img
+                            ref["fileName"] = "logo.png"
+                    
+                    try:
+                        response_retry = self._post_request_with_retry(session, url, payload)
+                        if response_retry.status_code in [200, 201]:
+                            data_retry = response_retry.json()
+                            logger.info("GS1 HTTP retry sucesso body: %s", response_retry.text)
+                            gtin_retry = self._extrair_gtin(data_retry)
+                            if gtin_retry and data_retry.get("result") != "ERROR":
+                                logger.info("EAN gerado com sucesso após fallback de imagem: %s", gtin_retry)
+                                return {"sucesso": True, "dados": {"gtin": gtin_retry, "raw": data_retry}}
+                            else:
+                                erro_msg = f"Falhou no retry com fallback: {data_retry.get('message') or response_retry.text}"
+                        else:
+                            erro_msg = f"Falhou no retry HTTP status={response_retry.status_code} body={response_retry.text}"
+                    except Exception as e_retry:
+                        erro_msg = f"Falha de comunicação no retry: {e_retry}"
 
             return {"sucesso": False, "erro": f"GS1 Rejeitou ({response.status_code}): {erro_msg}"}
 

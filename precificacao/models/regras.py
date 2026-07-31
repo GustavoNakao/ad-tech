@@ -152,6 +152,13 @@ class RegrasPrecificacao(models.Model):
     class Meta:
         verbose_name        = "Regras de Precificação"
         verbose_name_plural = "Regras de Precificação"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ativo"],
+                condition=models.Q(ativo=True),
+                name="unico_regra_precificacao_ativa",
+            )
+        ]
 
     def __str__(self):
         status = "✅ ATIVA" if self.ativo else "⏸ Inativa"

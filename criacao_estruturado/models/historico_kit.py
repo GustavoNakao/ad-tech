@@ -2,11 +2,11 @@
 from django.db import models
 
 class HistoricoKit(models.Model):
-    sku_origem = models.CharField(max_length=60)
-    id_origem = models.CharField(max_length=50)
-    sku_kit = models.CharField(max_length=60, unique=True)
-    id_kit = models.CharField(max_length=50)
-    criado_em = models.DateTimeField(auto_now_add=True)
+    sku_origem = models.CharField(max_length=60, db_index=True)
+    id_origem  = models.CharField(max_length=50, db_index=True)
+    sku_kit    = models.CharField(max_length=60, unique=True)
+    id_kit     = models.CharField(max_length=50, db_index=True)
+    criado_em  = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         verbose_name = "Histórico de Kit"

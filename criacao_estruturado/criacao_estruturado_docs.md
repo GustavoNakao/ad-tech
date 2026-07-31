@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-O módulo `criacao_estruturado` é responsável pela criação automatizada de **grades de kits** no BaseLinker, com integração ao Mercado Livre. A partir de um único produto base, o sistema gera 8 variações de anúncio (1/2/3/4 unidades × Clássico/Premium), com títulos otimizados para SEO, descrição persuasiva, ficha técnica preenchida por IA, precificação automática via Motor R831 v2 e registro de EAN/GTIN na GS1 Brasil.
+O módulo `criacao_estruturado` é responsável pela criação automatizada de **grades de kits** no BaseLinker, com integração ao Mercado Livre. A partir de um único produto base, o sistema gera 6 variações de anúncio (1/2/3 unidades × Clássico/Premium), com títulos otimizados para SEO, descrição persuasiva, ficha técnica preenchida por IA, precificação automática via Motor R831 v2 e registro de EAN/GTIN na GS1 Brasil. Permite também a combinação de até 5 produtos no total (1 principal + até 4 secundários) para Kit Misto.
 
 ---
 
@@ -51,14 +51,10 @@ Persistência de GTINs gerados na GS1 Brasil. Mapeia e rastreia o GTIN gerado in
 
 **Regra de Unicidade:** O modelo indexa individualmente por `sku_kit` (a restrição `unique_together` de `sku_origem` e `quantidade` foi removida para permitir que lotes de grade criados em momentos diferentes gerem novos GTINs independentes para o mesmo produto base).
 
-### `NcmGpc`
-Mapeamento permanente e dinâmico de NCM (8 dígitos) para o código GPC correspondente (8 dígitos). Substitui a classificação baseada em Inteligência Artificial.
+### `NcmGpc` [DESCONTINUADO em 23/06/2026]
+Este modelo e seu mapeamento permanente e dinâmico de NCM para GPC foram removidos para evitar inconsistências e permitir inserção manual obrigatória no painel.
 
-| Campo | Tipo | Descrição |
-|---|---|---|
-| `ncm` | CharField(20) | NCM do produto (Unique, Indexado) |
-| `gpc` | CharField(20) | Código GPC correspondente (Indexado) |
-| `criado_em` | DateTimeField | Auto preenchido |
+*(Tabela e modelo removidos fisicamente)*
 
 ### `NumeroReciclado`
 Tabela de SKUs que falharam durante a criação e devem ser reaproveitados na próxima tentativa.
@@ -105,9 +101,10 @@ Controla o próximo número de SKU a ser emitido (legado — substituído pela f
 ## Funções Utilitárias (módulo nível)
 
 ### `ajustar_titulo(titulo, min_c=55, max_c=60) -> str`
-Garante que o título fique entre 55 e 60 caracteres.
-- **Corte:** remove a última palavra inteira enquanto `len > max_c`
-- **Padding SEO:** adiciona palavras de reforço (`Alta Qualidade`, `Pronta Entrega`, etc.) enquanto `len < min_c`, sem repetir e sem palavras proibidas
+Garante que o título tenha no máximo `max_c` caracteres.
+- **Corte:** remove a última palavra inteira enquanto `len > max_c`.
+- **Sem Padding:** nunca tenta inflar ou preencher com palavras genéricas. Títulos curtos permanecem enxutos e diretos.
+- **Limpeza de Órfãos:** remove preposições e conjunções soltas no final do título.
 
 ### `formatar_title_case(titulo) -> str`
 Aplica Title Case preservando siglas (`LED`, `USB`, `HDMI`, `FM`, `UV`, etc.).
@@ -137,22 +134,36 @@ Orquestrador de agentes de IA especializados. Usa **Gemini 2.5 Flash** para Comp
 | **Agente 6 — Descrição** | Gemini 2.5 Flash | Cria descrição completa com 5 seções |
 
 ### Regras do Agente 1 — Compliance
-Bloqueia produtos nas categorias: Financeiro, Digital/Software, Segurança/Saúde, Propriedade Intelectual, Não-Produto, Adulto, Animais/Meio Ambiente.
+Bloqueia produtos nas categorias: Financeiro, Digital/Software, Segurança/Saúde, **Medicamentos (bloqueio total)**, Propriedade Intelectual, Não-Produto, Adulto, Animais/Meio Ambiente.
 Retorna JSON: `{"status": "ok"|"bloqueado"|"revisar", ...}`
 
+**Regra de Medicamentos — Atualizado em 2026-07-03:**
+Bloqueio total e imediato para qualquer produto cuja categoria do Mercado Livre seja identificada como de medicamentos. Esta regra é executada de forma programática pelo método `_is_categoria_medicamento` na classe `CriadorKitsService`.
+Ao resolver a categoria do produto (seja informada via URL ou prevista automaticamente):
+1. O sistema busca a árvore completa da categoria (`path_from_root`) e o nome da categoria no Mercado Livre.
+2. Se qualquer nível do caminho ou o nome da própria categoria contiver termos como *medicamento, medicamentos, remédio, remédios, remedio, remedios, fármaco, fármacos, farmaco, farmacos*, a criação do kit ou da grade é imediatamente **cancelada e bloqueada** com retorno de erro detalhado.
+
+**Regras de Propriedade Intelectual (PPPI) e Compliance do Mercado Livre — Atualizado em 2026-07-17:**
+*   **Formato Neutro Estrito de Títulos**: Todos os títulos devem seguir exclusivamente o formato `[Quantidade (se kit)] [Tipo de Produto] [Formato / Especificações / Modelo / Compatibilidade] [Marca]`. Absolutamente nada mais pode ser adicionado.
+*   **Proibição Absoluta de Adjetivos e Promessas de Resultado**: É terminantemente proibido o uso de termos vazios (filler) e adjetivos subjetivos de qualidade (`"resistente"`, `"prático"`, `"premium"`, `"clássico"`, `"original"`, `"excelente"`, `"alta qualidade"`) ou promessas de resultado (`"forte"`, `"fortes"`, `"eficaz"`, `"eficiente"`, `"poderoso"`, `"potente"`, `"remove manchas"`, `"tira encardido"`, `"ação rápida"`, `"substitui cal"`).
+*   **Remoção Definitiva de Padding**: O preenchimento com palavras-chave adicionais de SEO foi completamente desativado. Títulos curtos permanecem enxutos, neutros e focados apenas em especificações físicas reais.
+*   **Diretrizes de Saúde e ANVISA**: Bloqueio total de termos de ação farmacológica (analgésico, cicatrizante, expectorante), cura ou prevenção de doenças, citação de sintomas (tosse, gripe, insônia, dor), dosagem/bula (posologia) e ingredientes proibidos (Tribulus Terrestris, Ginkgo Biloba, etc.).
+*   **Disclaimer da ANVISA**: Para qualquer produto na categoria de suplementos alimentares ou naturais, a descrição final obrigatoriamente inclui no término da seção `ideal_para` o parágrafo: *"Este produto é um suplemento alimentar/aromatizante e não um medicamento. Em caso de dúvidas, consulte um médico."*
+*   **Uso de Marcas de Terceiros**: Bloqueia termos de similaridade (`"tipo X"`, `"similar a"`, `"réplica"`) e obriga o formato de compatibilidade (`"compatível com X"` ou `"para X"`).
+
 ### Regras do Agente 2A — Título Unitário
-- 55 a 60 caracteres obrigatórios
-- Proibido: `Premium`, `Clássico`, `Original`, `Pack`, `Kit` (no unitário), caracteres especiais
-- Estrutura: Palavra-chave principal → Linha → Capacidade → Quantidade → Reforço
-- 3 tentativas; na falha, aplica `ajustar_titulo()` em Python
+- Limite máximo de 60 caracteres (sem mínimo obrigatório e sem padding).
+- Proibido qualquer adjetivo subjetivo, promessa comercial, termo de garantia ou promessa de resultado.
+- Estrutura rígida e obrigatória: `[Tipo de Produto] [Formato / Especificação / Modelo / Compatibilidade] [Marca]`.
+- Foco em dados reais (ml, polegadas, voltagem, cor, tamanho, quantidade).
+- 3 tentativas; na falha, aplica `ajustar_titulo()` em Python (que apenas valida espaços e trunca o teto de 60 caracteres sem cortar palavras).
 - **Resiliência contra cache corrompido:** utiliza `use_cache=(tentativa == 0)`. Se a primeira tentativa (que lê do cache) falhar nos critérios de validação, as tentativas subsequentes ignoram o cache e consultam a API em tempo real.
 
 ### Regras do Agente 2B — Grade de Títulos
-- Gera 8 títulos neutros (sem quantidade) com ~45–55 chars
-- Chaves retornadas: `t1_a`, `t1_b`, `t2_a`, `t2_b`, `t3_a`, `t3_b`, `t4_a`, `t4_b`
-- Mapeamento interno: `t1_a → 1_classico`, `t1_b → 1_premium`, etc.
-- Inclui campo `estrategia_seo` obrigatório antes dos títulos
-- Fallback: usa o nome original formatado se falhar
+- Gera 8 títulos base neutros (sem quantidade) seguindo estritamente a estrutura descritiva acima com no máximo 55-60 caracteres.
+- Proibido qualquer termo subjetivo, comercial, promessa de saúde ou promessa de resultado.
+- Inclui campo `estrategia_seo` obrigatório antes dos títulos.
+- Fallback: usa o nome original formatado se falhar.
 - **Resiliência contra cache corrompido:** utiliza `use_cache=(tentativa == 0)`. Se a primeira tentativa (que lê do cache) falhar no parser de JSON ou nos critérios de grade, as tentativas subsequentes ignoram o cache e realizam chamadas diretas à API.
 
 ### Regras do Agente 4 — Ficha Técnica
@@ -171,9 +182,11 @@ Retorna JSON: `{"status": "ok"|"bloqueado"|"revisar", ...}`
 ### Regras do Agente 6 — Descrição (Copywriter)
 - Template fixo com 5 seções em ordem imutável
 - Máx. 2800 caracteres
-- BENEFÍCIOS: começam com verbo no presente (Garante, Elimina, Protege...)
+- PROIBIDO QUALQUER ALEGAÇÃO TERAPÊUTICA OU PROMESSA DE RESULTADO: Proibido prometer cura de doenças, tratamento de sintomas, emagrecimento, rejuvenescimento estético ou prevenção de males. Deve ser factual.
+- PROIBIDO TERMOS DE ENVIO OU GARANTIA: Proibido usar "Envio Rápido", "Envio Imediato", "Pronta Entrega", "Entrega Rápida", "Despacho Rápido", "Garantia", "Garantido", "Garantimos", "Garantia de Fábrica".
+- BENEFÍCIOS: começam com verbo no presente de forma funcional (Auxilia, Facilita, Protege...) sem efeitos subjetivos/milagrosos.
 - DIFERENCIAIS: formato `Característica — benefício`
-- Proibido: adjetivos vazios, clichês de marketing, EAN/SKU no texto
+- Proibido: adjetivos vazios (incrível, revolucionário), clichês de marketing, EAN/SKU no texto, termos comerciais subjetivos (preço imbatível, garantido)
 - 3 tentativas; na última aceita o melhor disponível
 - **Resiliência contra cache corrompido:** utiliza `use_cache=(tentativa == 0)`. Se o cache retornar uma descrição incompleta ou inválida, a tentativa seguinte forçará a consulta em tempo real da API para re-gerar e atualizar o cache com sucesso.
 
@@ -305,27 +318,23 @@ Resolve campos de ficha técnica a partir dos dados físicos do produto sem prec
 Para `quantidade > 1` ou unitários com `forcar_unitario=True` (Orquestração de Lote, Compartilhamento Resiliente e Unicidade):
 1. **Busca Inteligente por Quantidade no Banco Local:** Antes de chamar a GS1 ou gerar novo código, o método realiza um lookup persistente na tabela local `GtinKit` filtrando por `sku_origem` e `quantidade` (excluindo EANs `PENDENTE` ou vazios). Se já existir um EAN gerado para aquela quantidade (ex: gerado pela variação clássica em um lote anterior ou execução parcial), ele é reaproveitado e herdado imediatamente. Isso garante 100% de consistência de compartilhamento de EAN entre Clássico e Premium mesmo em caso de falhas parciais ou execuções separadas, reduzindo drasticamente o consumo de créditos na GS1.
 2. **Cache de Lote (Execução):** Adicionalmente, no método `executar_criacao_grade`, mantemos um cache local em memória (`self.gtins_gerados_lote: Dict[int, str]`). Se a quantidade já teve um EAN gerado na mesma execução (ex: Clássico acabou de gerar para Qtd 2), a variação correspondente (ex: Premium) herda esse EAN em memória instantaneamente e registra a entrada histórica no banco local individualmente para o seu `sku_kit`.
-3. **Resolução de GPC (Sem IA):**
-   - **GPC Manual:** Tenta obter do parâmetro `gpc_manual` (passado a partir do painel na criação). Se for válido (8 dígitos), salva de forma definitiva e permanente na tabela local `NcmGpc`.
-   - **Mapeamento Local:** Se não foi fornecido manual ou for inválido, busca na tabela local `NcmGpc` pelo NCM do produto base.
-   - **Fallback Estático:** Se não houver mapeamento local, busca no dicionário estático local por faixas de NCM (`_obter_fallback_gpc_por_ncm`). Ao encontrar, grava imediatamente na tabela local `NcmGpc` para persistência definitiva futura.
-   - **Exceção:** Se o NCM for inédito e nenhum GPC foi fornecido ou sugerido, lança uma exceção exigindo o preenchimento manual no painel.
+3. **Reconciliação Pós-Grade (Sincronização Atômica):** Para evitar que falhas temporárias ou oscilações de rede da API da GS1 no início do lote causem inconsistências (onde o clássico fica sem EAN e o premium com EAN), o sistema realiza um pós-processamento de reconciliação de EANs ao final do loop de grade. Se qualquer anúncio criado no lote gerou com sucesso um EAN legítimo para uma dada quantidade, esse EAN correto é copiado retroativa e atômica para o anúncio irmão de mesma quantidade, atualizando o registro local em `GtinKit` (de `PENDENTE` para o EAN real) e aplicando a sincronização definitiva via `addInventoryProduct` no BaseLinker.
+4. **Resolução de GPC (Atualizado em 23/06/2026):**
+   - **GPC Manual Obrigatório:** O GPC passa a ser um campo obrigatório no painel. O código de 8 dígitos numéricos fornecido pelo usuário (`gpc_manual`) é validado e enviado diretamente no payload.
+   - **Remoção de Mapeamento/Fallback:** O banco local `NcmGpc` e o fallback automático por faixas de NCM foram removidos para evitar inconsistências (como atribuição automática de categorias inválidas nível segmento). Se o GPC não for informado no painel, o sistema impede a geração do EAN e lança um erro.
 4. **Persistência Local de GTIN:** O método consulta e persiste em `GtinKit` usando `sku_kit=sku_kit_final` como chave de busca, garantindo reaproveitamento caso este SKU específico do kit já tenha sido registrado anteriormente.
 5. **Tratamento Seguro de Falha na GS1 (Evita Rejeições):** Se a API da GS1 falhar (por timeout ou limite de conexões): para anúncios unitários (Qtd = 1), o sistema resgata e reutiliza o EAN original do produto base como fallback se for válido; para kits (Qtd > 1) ou se o unitário não tiver EAN, o sistema registra como 'PENDENTE' no banco local e retorna uma string vazia `""`. Isso impede a injeção de GTINs com formatos inválidos (ex: iniciados com '1') que seriam rejeitados duramente pelos marketplaces como o Mercado Livre.
 
-#### `_obter_fallback_gpc_por_ncm(ncm_limpo) -> Optional[str]`
-Retorna o código GPC de fallback para NCMs comuns do estoque com base em regras estáticas (ex: `8481...` -> `10002602` para Torneiras/Misturadores, `8544...` -> `10000586` para Cabos/Conectores, etc.).
-
-**Taxonomia Base de Conhecimento:**
-7. **Artigos para Bebê (Chupetas/Mordedores):** `10000504`.
-8. **Cabos, Fios, Adaptadores e Conectores:** `10000586`.
-9. **Encanamento e Hidráulica (Torneiras/Registros):** `10002602`.
-10. **Adesivos, Colas e Fitas:** `10000624`.
-11. **Utensílios Domésticos de Cozinha/Mesa:** `10002152`.
-12. **Climatização (Umidificadores):** `10000120`.
-13. **Iluminação (Lâmpadas/Luminárias):** `10000552`.
-14. **Curativos e Primeiros Socorros:** `10005844`.
-
+#### `_obter_fallback_gpc_por_ncm(ncm_limpo) -> Optional[str]` [DESCONTINUADO em 23/06/2026]
+*(Método removido para dar lugar à obrigatoriedade do GPC no painel)*
+* **Copos, Pratos, Talheres, Mamadeiras e Utensílios de Plástico (`3924...`):** GPC `10002152` (Utensílios Domésticos de Cozinha/Mesa)
+* **Detergentes, Sabões, Limpadores e Desinfetantes (`3402...`, `3808...`):** GPC `10000816` (Produtos de Limpeza Doméstica)
+* **Desodorantes e Antitranspirantes (`3307...`):** GPC `10000916` (Desodorantes / Antitranspirantes)
+* **Shampoos, Condicionadores e Cosméticos Capilares (`3305...`):** GPC `10000922` (Cuidados com o Cabelo)
+* **Perfumes e Cosméticos em Geral (`3303...`, `3304...`):** GPC `10000902` (Cosméticos / Beleza)
+* **Iluminação, Lâmpadas e Luminárias (`8539...`, `9405...`):** GPC `10000552` (Lâmpadas / Luminárias)
+* **Climatização e Umidificadores (`8509...`, `8516...`):** GPC `10000120` (Umidificadores / Climatizadores)
+* **Curativos e Primeiros Socorros (`3005...`):** GPC `10005844` (Curativos / Primeiros Socorros)
 
 ---
 
@@ -339,6 +348,15 @@ Sincroniza a hierarquia de categorias do ML para o BaseLinker:
 4. Retorna o ID do último nível criado/encontrado
 5. **Fallback:** retorna `ID_CATEGORIA_KITS` em qualquer erro ou se `category_id_ml` for `None`/`"979589"`
 
+#### Otimização de Predição de Categorias (Atualizado em 2026-07-08)
+Quando uma categoria do Mercado Livre não é informada no painel, o sistema realiza a predição automática a partir do título do produto base utilizando `MercadoLivreClient().predict_categoria(titulo)`.
+
+Para evitar classificações erráticas geradas por ruídos em cadastros (por exemplo, títulos que se iniciam com códigos de fábrica, SKUs de controle ou termos curtos/marcas como "V8", "B12", "18911" que induzem o classificador de IA do Mercado Livre a associar o item a categorias automotivas ou outras indesejadas), o cliente aplica um algoritmo de limpeza de query antes de enviar ao preditor:
+1. **Limpeza de Prefixos Delimitados:** Se o título inicia com códigos curtos (até 8 caracteres alfanuméricos ou qualquer número de caracteres se for numérico puro) e é seguido de delimitadores como `-`, `|`, `:`, `/`, este prefixo é recursivamente removido.
+2. **Remoção de Tokens de Códigos Soltos:** Palavras de até 6 dígitos ou alfanuméricos curtos e isolados (como "V8") localizados no início do título são limpos.
+
+Esta higienização é efetuada **estritamente na chamada da API de Domain Discovery** do Mercado Livre, preservando o título real do produto cadastrado.
+
 ---
 
 ### Métodos de Validação (Travas de Segurança)
@@ -350,7 +368,24 @@ Bloqueia a criação se o produto base não tiver:
 - `height > 0` (altura)
 - `width > 0` (largura)
 
+Após as validações bloqueantes, chama `_alertar_dimensoes_suspeitas()` para emitir avisos não-bloqueantes.
+
 Retorna mensagem de erro descritiva ou `None` se OK.
+
+#### `_alertar_dimensoes_suspeitas(dados) -> List[str]` — Atualizado em 2026-07-03
+Detecta dimensões inconsistentes e emite `logger.warning` **sem bloquear** a criação. Retorna a lista de alertas gerados.
+
+**Heurísticas aplicadas:**
+
+| Condição | Descrição |
+|---|---|
+| Dimensão > 100 cm | Excede o limite por lado do Mercado Envios. Valor será recortado pelo clamping. |
+| Dimensão > 60 cm + Peso < 5 kg | Possível erro de unidade (dado em mm em vez de cm). Confira o cadastro. |
+| Soma (A+L+C) > 200 cm | Excede o limite de soma antes mesmo de multiplicar pela quantidade. |
+
+Os alertas são acumulados em `self._alertas_dimensao` e incluídos no retorno de `executar_criacao_grade` sob a chave `alertas_dimensao`, exibidos visualmente no painel como `⚠️ messages.warning`.
+
+
 
 #### `_validar_conteudo_ia(conteudo, nome_original) -> Optional[str]`
 Valida se a IA gerou conteúdo válido antes de consumir SKU:
@@ -413,6 +448,7 @@ executar_criacao_grade(
     sku_secundario=None,   # SKU do 2º produto (Kit Misto)
     category_id_ml=None,   # Category ID do Mercado Livre
     gerar_ean_unitario=False, # Se True, gera novo GTIN para Qtd 1
+    skus_secundarios=None, # Lista de SKUs adicionais para Kit Misto (combina até 5 produtos)
 ) -> Dict
 ```
 
@@ -421,13 +457,13 @@ executar_criacao_grade(
 ```
 1. Baixar dados do produto base
 2. TRAVA: _validar_dados_essenciais() — bloqueia se faltar imagem/peso/altura/largura
-3. Se Kit Misto: baixar e validar produto secundário
+3. Se Kit Misto: baixar e validar produtos secundários (até 4)
 4. Resolução de categoria ML:
    - Se não informada/padrão → predict_categoria() via nome do produto
 5. Sincronizar categoria ML → BaseLinker
 6. Calcular grade de preços via Calculadora.calcular_grade()
    - Inclui vendas_60_dias para tarifa reduzida
-   - Kit Misto: soma custos e pesos
+   - Kit Misto: soma custos e pesos de todos os produtos combinados
 7. BLOQUEIO: se grade.bloqueado → retorna erro
 8. Gerar conteúdo base (1 chamada à IA para todos os 8 anúncios):
    - gerar_conteudo(..., gera_grade=True) → 8 títulos + 1 descrição + ficha técnica
@@ -467,7 +503,14 @@ Cria um **único kit** (não uma grade). Fluxo similar ao `executar_criacao_grad
 
 ## View — `painel_kits`
 
-Painel web protegido por `@cadastro_required`.
+Painel web protegido por `@cadastro_required` e `@never_cache` (para impedir que o navegador faça cache do histórico e exiba dados de resumos ou formulários de kits anteriores).
+
+### Fluxo de UI e Reset do Formulário (Atualizado em 26/05/2026)
+
+Para garantir uma experiência de uso premium e livre de atritos, a interface foi blindada contra a persistência de estados do navegador:
+
+1. **Blindagem de Cache (`@never_cache`):** A view adiciona cabeçalhos HTTP que instruem o navegador a nunca salvar a página em cache local ou de histórico. Isso garante que a página sempre seja renderizada em seu estado fresco e atualizado.
+2. **Reset Inteligente por Javascript:** Injetado um listener de inicialização no template `painel_kits.html`. Ao carregar a página, se for detectada a mensagem de sucesso de criação de grade de kits, o script limpa automaticamente todos os inputs de texto, URLs, hidden-inputs e desmarca os checkboxes dos formulários da esquerda (`form-analisar`) e oculto (`form-criacao`), fazendo a interface retornar com perfeição ao estado inicial de *"Aguardando produto..."*.
 
 ### Ação `analisar`
 1. Recebe SKU manual (+ SKU secundário, URL do ML e `gerar_ean_unitario` opcionais)
@@ -528,7 +571,7 @@ Banco PostgreSQL → get_next_kit_sku()
 
 ---
 
-## Grade de 8 Anúncios
+## Grade de 6 Anúncios
 
 | Variação | Chave da Grade | Quantidade | Modalidade |
 |---|---|---|---|
@@ -538,17 +581,32 @@ Banco PostgreSQL → get_next_kit_sku()
 | Kit 2 Premium | `2_premium` | 2 | premium |
 | Kit 3 Clássico | `3_classico` | 3 | classico |
 | Kit 3 Premium | `3_premium` | 3 | premium |
-| Kit 4 Clássico | `4_classico` | 4 | classico |
-| Kit 4 Premium | `4_premium` | 4 | premium |
 
 **Regras de EAN por variação:**
 - Quantidade 1 → Usa o EAN legítimo do produto base. Se o produto base não possuir EAN cadastrado ou se estiver como `'PENDENTE'`, o sistema ativa automaticamente a autogeração resiliente (mesmo com a flag `gerar_ean_unitario` desligada) para garantir que o unitário vá ao ar com um EAN válido na GS1, ou se `gerar_ean_unitario` for `True` explicitamente.
-- Quantidade > 1 → Gera um novo EAN oficial na GS1, compartilhado rigorosamente entre as variações Clássica e Premium de mesmo nível (quantidade) através da busca inteligente por quantidade no banco de dados local. Isso limita a exatamente 4 EANs gerados na GS1 por lote completo de 8 anúncios.
+- Quantidade > 1 → Gera um novo EAN oficial na GS1, compartilhado rigorosamente entre as variações Clássica e Premium de mesmo nível (quantidade) através da busca inteligente por quantidade no banco de dados local. Isso limita a exatamente 3 EANs gerados na GS1 por lote completo de 6 anúncios.
 
 **Tags Especiais:**
 - Quantidade 1 (apenas na modalidade Clássico) → Recebe adicionalmente a tag `Marketplace` no BaseLinker para distinção visual.
 
 **Peso por variação:** `peso_base × quantidade` (+ peso_secundario × quantidade se Kit Misto)
+
+**Dimensões por variação (empilhamento vertical):**
+- `height` = `altura_base × quantidade` — os produtos ficam empilhados um sobre o outro
+- `width` e `length` = dimensão base (não multiplicam pela quantidade)
+
+**Clamping obrigatório — Limites do Mercado Envios (Correios) — Atualizado em 2026-07-03:**
+
+| Dimensão | Mínimo | Máximo por lado |
+|---|---|---|
+| Altura | 1 cm | 100 cm |
+| Largura | 8 cm | 100 cm |
+| Comprimento | 13 cm | 100 cm |
+| **Soma A+L+C** | — | **200 cm** |
+| **Peso** | — | **30 kg** |
+
+Se a soma (A+L+C) ultrapassar 200 cm após o cálculo, todas as dimensões são reduzidas proporcionalmente. Se o peso do kit ultrapassar 30 kg, é travado em 30 kg. O sistema emite um `logger.warning` sempre que o clamping for ativado.
+
 
 ---
 
@@ -563,6 +621,14 @@ Banco PostgreSQL → get_next_kit_sku()
 | `GroqClient` | Agentes de Ficha Técnica e Keywords |
 | `Calculadora` (R831 v2) | Cálculo de preços (promoção + vitrine) |
 | `TermosProibidos` | Validação de palavras proibidas no título |
+
+### Melhorias no `GeminiClient` para Descrições Completas (Atualizado em 26/05/2026)
+
+Para eliminar definitivamente o problema de descrições incompletas, truncadas ou cortadas na metade geradas pela IA (especialmente para produtos de higiene, limpeza e puericultura como mamadeiras de látex que ativavam falsos positivos de segurança por termos biológicos/maternos), o cliente do Gemini foi aprimorado com as seguintes configurações de infraestrutura de IA:
+
+1. **Aumento dos Tokens de Saída (`maxOutputTokens: 8192`):** Ampliado o limite máximo de tokens gerados em uma única resposta de 2048 para 8192 tokens. Isso garante espaço suficiente para descrições extremamente ricas, detalhadas e longas sem qualquer truncamento no final do arquivo.
+2. **Ignorar Filtros de Segurança (`safetySettings` com `BLOCK_NONE`):** Configurado o bloqueio zero (`BLOCK_NONE`) em todas as categorias de dano da API (Assédio, Discurso de Ódio, Conteúdo Sexualmente Explícito e Conteúdo Perigoso). Isso evita os falsos positivos de censura gerados por palavras como *"látex"*, *"seio materno"* ou *"chupetas"* e permite a geração contínua e intacta dos textos de copywriter.
+3. **Resiliência e Retries:** O `GeminiClient` e o `CriadorKitsService` trabalham em conjunto com desativação dinâmica de cache (`use_cache=(tentativa == 0)`) em caso de erros de parse do JSON ou seções ausentes, forçando chamadas em tempo real em eventuais retentativas para auto-corrigir instabilidades.
 
 ---
 
@@ -607,3 +673,26 @@ sequenceDiagram
 1. **Overlay de Progresso e Comunicação AJAX:** O template `painel_kits.html` exibe um overlay em tela cheia com um spinner e um botão de interrupção. Quando o botão é clicado, o JS captura de forma precisa o SKU de origem do formulário (obtido através do input `sku_manual`) e envia via `fetch` assíncrono para a view do Django com `acao=cancelar_lote`.
 2. **Consistência Atômica de GTINs:** O backend, ao detectar a flag `"cancelado"` no cache do Django no início de qualquer iteração de anúncio do lote, interrompe imediatamente o loop e chama o método `executar_rollback_grade(sku_origem)`. 
 3. **Limpeza na GS1 Brasil:** O rollback lê os GTINs cadastrados localmente para aquele lote de criação e dispara requisições de exclusão/inativação na API oficial da GS1 Brasil (CNP) para cada um dos EANs recém-gerados, eliminando desperdício e impedindo a publicação de GTINs inválidos gerados a partir de produtos incorretos.
+
+---
+
+## Atualizações e Ajustes Técnicos (Sprint 2)
+### Atualizado em 2026-05-27
+- **Índices de Banco de Dados no HistoricoKit (M4)**: Foram adicionados índices explícitos (`db_index=True`) nos campos mais comumente filtrados do modelo `HistoricoKit` (`sku_origem`, `id_origem`, `id_kit` e `criado_em`). Isso acelera significativamente as consultas de rollback e as listagens na página principal.
+- **Unicidade e Independência de GTINs no GtinKit (M5)**: Substituída a restrição anterior baseada em `(sku_origem, quantidade)` pela constraint `UniqueConstraint(fields=["sku_kit"], condition=models.Q(sku_kit__isnull=False), name="unique_gtin_por_sku_kit")`. Isso restabelece a regra de negócio original permitindo que lotes de grade criados em momentos diferentes gerem novos GTINs independentes para o mesmo produto base, impedindo que anúncios distintos reutilizem o mesmo GTIN de catálogo no Mercado Livre de forma inapropriada. Adicionalmente, os métodos de rollback e cancelamento voluntário do service foram aprimorados para isolar e afetar estritamente o lote de criação atual (usando timestamps e SKUs da corrida corrente), protegendo anúncios antigos e estáveis contra exclusões acidentais.
+- **Segurança de Timeout no Frontend (B6)**: Adicionado um temporizador de auto-cancelamento de segurança de 15 minutos no overlay de loading do template `painel_kits.html`. Se o servidor falhar ou demorar mais do que o esperado, o overlay is fechado e um alerta visual amigável é mostrado ao usuário, prevenindo o travamento infinito da tela.
+- **Logger Rotativo e Arquivos de Logs Locais (B9)**: Adicionado o handler `RotatingFileHandler` nas configurações de log do Django (`settings.py`), gravando de forma rotativa e automática em arquivos na pasta local `logs/` com limite de 10MB por arquivo e mantendo até 5 backups, além de criar dinamicamente a pasta `logs/` se ela não existir.
+- **Resiliência e Fallback de Imagens na API GS1 (Extras)**: Implementado tratamento robusto de respostas no client GS1 (`integracoes/gs1/client.py`) para capturar erros 200/201 que trazem `result=ERROR` e validar GTINs nulos, evitando o crash de não-nulo do banco local (`IntegrityError`). Adicionado retry automático de cadastro com imagem alternativa (`GS1_IMAGE_FALLBACK` configurável, default `https://soproduto.com.br/favicon.png`) quando o servidor do Cadastro Nacional de Produtos da GS1 rejeitar o CDN do BaseLinker (`upload.cdn.baselinker.com`) por inacessibilidade de download.
+
+### Atualizado em 2026-07-20
+- **Suporte a `skus_secundarios` no `CriadorKitsService.executar_criacao_grade`**: Adicionado o parâmetro `skus_secundarios: Optional[List[str]] = None` à assinatura da função `executar_criacao_grade`. A view `painel_kits` agora envia a lista de SKUs secundários sem disparar `TypeError`, e a service consolida todos os SKUs informados para calcular custos agregados, pesos combinados e a estrutura de produtos vinculados (bundle) no BaseLinker.
+- **Remoção de Consultas ao Modelo Obsoleto `NcmGpc` no Fluxo GS1**: Removidas chamadas ORM ao modelo descontinuado `NcmGpc` em `_obter_ean_kit()`, eliminando o erro de banco de dados `relação "criacao_estruturado_ncmgpc" não existe` e reestabelecendo a emissão oficial de GTINs/EANs na API da GS1 Brasil.
+- **Obrigatoriedade e Resolução Manual da Árvore de Categoria do Mercado Livre**: Eliminada a predição/adivinhação automática de categorias baseada em títulos (`predict_categoria`). O formulário do painel agora exige obrigatoriamente o preenchimento manual da categoria (`categoria_ml`). O método `resolver_categoria_por_input()` no `MercadoLivreClient` processa automaticamente o input nos formatos:
+  1. Árvore com separadores (ex: `Casa, Móveis e Decoração / Banheiros / Sifões`);
+  2. Árvore copiada diretamente da página do ML sem espaços/separadores (ex: `Casa, Móveis e DecoraçãoBanheirosSifões`);
+  3. ID direto de categoria (ex: `MLB277472`);
+  4. URL pública do produto no Mercado Livre.
+
+
+
+

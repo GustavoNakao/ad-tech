@@ -15,6 +15,13 @@ class GtinKit(models.Model):
     class Meta:
         verbose_name = "GTIN de Kit"
         verbose_name_plural = "GTINs de Kits"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sku_kit"],
+                condition=models.Q(sku_kit__isnull=False),
+                name="unique_gtin_por_sku_kit",
+            )
+        ]
 
     def __str__(self):
         return f"{self.sku_origem} (Kit {self.sku_kit} | Qtd {self.quantidade}) -> {self.gtin}"

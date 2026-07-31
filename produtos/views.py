@@ -9,6 +9,7 @@ from .services.gerador_ean import GeradorEANService
 def gerar_ean(request):
     ...
 
+@cadastro_required
 def gerador_ean_view(request):
     contexto = {"resultado": None, "erro": None}
 

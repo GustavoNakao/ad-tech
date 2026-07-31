@@ -298,6 +298,43 @@ class MercadoLivreClient:
         uniq = [t for t in tokens if not (t in vistos or vistos.add(t))]
         return ' '.join(uniq).strip()
 
+    @staticmethod
+    def _limpar_titulo_para_categoria(titulo: str) -> str:
+        """Limpa prefixos de SKU e códigos alfanuméricos curtos do título."""
+        if not titulo:
+            return ""
+        titulo = titulo.strip()
+        
+        while True:
+            # Captura prefixos delimitados por -, |, : ou / no início do título
+            match = re.match(r'^([^-\|:\/]{1,15})\s*([-\|:\/])\s*(.*)$', titulo)
+            if not match:
+                break
+            prefixo = match.group(1).strip()
+            resto = match.group(3).strip()
+            
+            is_codigo = False
+            if prefixo.isdigit():
+                is_codigo = True
+            elif any(c.isdigit() for c in prefixo) and len(prefixo) <= 8:
+                is_codigo = True
+            elif len(prefixo) <= 4:
+                is_codigo = True
+            elif prefixo.upper() in ["COD", "REF", "SKU", "PROD", "MODELO", "MARCA", "FABRICANTE", "CONJUNTO", "KIT"]:
+                is_codigo = True
+                
+            if is_codigo and resto:
+                titulo = resto
+            else:
+                break
+                
+        # Remove palavras soltas puramente numéricas ou códigos curtos no início
+        match_inicio = re.match(r'^(\b\d{1,6}\b|\b[a-zA-Z]\d{1,2}\b)\s+(.*)$', titulo, re.IGNORECASE)
+        if match_inicio:
+            titulo = match_inicio.group(2).strip()
+            
+        return titulo
+
     def _domain_para_category(self, domain_id: str, nome_produto: str = "") -> Optional[str]:
         """
         Converte domain_id em category_id via domain_discovery.
@@ -495,6 +532,126 @@ class MercadoLivreClient:
         )
         return fallback_id
 
+    @staticmethod
+    def _remover_acentos_norm(txt: str) -> str:
+        """Remove acentos e pontuações para comparação insensível a acentuação."""
+        if not txt:
+            return ""
+        import unicodedata
+        nfkd = unicodedata.normalize("NFKD", txt)
+        ascii_txt = nfkd.encode("ASCII", "ignore").decode("ASCII")
+        return re.sub(r'[^a-z0-9]', '', ascii_txt.lower())
+
+    def resolver_categoria_por_input(self, entrada: str) -> Optional[str]:
+        """
+        Resolve o category_id do ML a partir de entrada manual do usuário:
+        1. URL do produto (http... ou mercadolivre.com...)
+        2. ID direto da categoria (MLB277472 ou 277472)
+        3. Árvore de categoria digitada/copiada manualmente pelo usuário:
+           - Com separadores: "Casa, Móveis e Decoração / Banheiros / Sifões"
+           - Sem separadores (copiada direta do ML): "Casa, Móveis e DecoraçãoBanheirosSifões"
+        """
+        if not entrada or not entrada.strip():
+            return None
+
+        texto = entrada.strip()
+
+        # 1. URL do produto
+        if "http://" in texto or "https://" in texto or "mercadolivre.com" in texto.lower():
+            cat = self.buscar_category_id_por_url(texto)
+            if cat and cat != ML_CATEGORIA_PADRAO:
+                return cat
+
+        # 2. ID direto de categoria (ex: MLB277472 ou 277472)
+        match_id = re.match(r'^(?:MLB)?(\d+)$', texto, re.IGNORECASE)
+        if match_id:
+            cand_id = f"MLB{match_id.group(1)}"
+            det = self.detalhes_categoria(cand_id)
+            if det and not det.get("depreciada") and det.get("name"):
+                logger.info("Resolver Categoria: ID direto válido '%s' (%s)", cand_id, det.get("name"))
+                return cand_id
+
+        # 3. Texto da Árvore de Categorias (Formatos 1 e 2)
+        # Separa palavras coladas estilo camelCase/TitleCase (ex: "DecoraçãoBanheiros" -> "Decoração Banheiros")
+        texto_separado = re.sub(r'([a-zà-ÿ0-9])([A-ZÀ-ÖØ-ß])', r'\1 \2', texto)
+        query_limpa = re.sub(r'[/><,;\-]', ' ', texto_separado)
+        query_limpa = re.sub(r'\s+', ' ', query_limpa).strip()
+
+        # Remove acentos e caracteres especiais para comparação exata de caminhos
+        texto_norm = self._remover_acentos_norm(texto)
+
+        logger.info("Resolver Categoria por árvore: texto original='%s' | query='%s'", texto[:60], query_limpa[:60])
+
+        queries_testar = [query_limpa[:100]]
+        palavras = query_limpa.split()
+        if len(palavras) >= 2:
+            queries_testar.append(' '.join(palavras[-2:]))
+        if len(palavras) >= 3:
+            queries_testar.append(' '.join(palavras[-3:]))
+        if len(palavras) >= 1 and palavras[-1] not in queries_testar:
+            queries_testar.append(palavras[-1])
+
+        candidatos_vistos: set = set()
+        candidates: list = []
+
+        for q_test in queries_testar:
+            if not q_test or len(q_test) < 2:
+                continue
+            res = self._get_pub(
+                f"sites/{ML_SITE}/domain_discovery/search",
+                params={"q": q_test, "limit": 5},
+            )
+            if res and isinstance(res, list):
+                for item in res:
+                    c_id = item.get("category_id")
+                    if c_id and c_id not in candidatos_vistos:
+                        candidatos_vistos.add(c_id)
+                        candidates.append(item)
+
+        if not candidates:
+            logger.warning("Resolver Categoria: Nenhuma categoria encontrada para '%s'", texto[:60])
+            return None
+
+        melhor_cat_id = None
+        melhor_score = -1
+
+        for item in candidates:
+            cand_id = item.get("category_id")
+            if not cand_id:
+                continue
+
+            det = self.detalhes_categoria(cand_id)
+            if not det or det.get("depreciada"):
+                continue
+
+            # Avalia match de níveis de caminho (path)
+            path_str = det.get("path", "")
+            niveis = [n.strip() for n in path_str.split(">") if n.strip()]
+
+            score = 0
+            for nivel in niveis:
+                nivel_norm = self._remover_acentos_norm(nivel)
+                if nivel_norm and len(nivel_norm) >= 3 and nivel_norm in texto_norm:
+                    score += 1
+
+            logger.debug("Candidata %s ('%s') -> score=%d/%d", cand_id, path_str, score, len(niveis))
+
+            if score > melhor_score:
+                melhor_score = score
+                melhor_cat_id = cand_id
+
+        if melhor_cat_id and melhor_score > 0:
+            logger.info("Resolver Categoria por árvore: ✅ Resolvido → %s (score=%d)", melhor_cat_id, melhor_score)
+            return melhor_cat_id
+
+        # Fallback para a primeira candidata se nenhuma pontuou
+        primeiro_id = candidates[0].get("category_id")
+        if primeiro_id:
+            logger.info("Resolver Categoria por árvore: Fallback primeira opção → %s", primeiro_id)
+            return primeiro_id
+
+        return None
+
     # =========================================================================
     # MÉTODOS DE CATEGORIAS (usados pelo admin Django)
     # =========================================================================
@@ -506,9 +663,14 @@ class MercadoLivreClient:
         """
         if not titulo or not titulo.strip():
             return []
+        
+        titulo_limpo = self._limpar_titulo_para_categoria(titulo)
+        if not titulo_limpo:
+            titulo_limpo = titulo.strip()
+
         data = self._get_pub(
             f"sites/{ML_SITE}/domain_discovery/search",
-            params={"q": titulo.strip(), "limit": limite},
+            params={"q": titulo_limpo, "limit": limite},
         )
         if not data or not isinstance(data, list):
             return []
@@ -525,7 +687,10 @@ class MercadoLivreClient:
                     for a in item.get("attributes", [])
                 ],
             })
-        logger.info("predict_categoria '%s' → %d resultado(s).", titulo[:50], len(resultados))
+        if titulo != titulo_limpo:
+            logger.info("predict_categoria '%s' (limpo: '%s') → %d resultado(s).", titulo[:50], titulo_limpo[:50], len(resultados))
+        else:
+            logger.info("predict_categoria '%s' → %d resultado(s).", titulo[:50], len(resultados))
         return resultados
 
     def detalhes_categoria(self, category_id: str) -> Optional[dict]:

@@ -52,25 +52,28 @@ class Calculadora:
         category_id: Optional[str] = None,
         custo_saida_transportadora: Optional[float] = None,
         vendas_60_dias:             int = 0,
+        limite_unidades:            int = 4,
     ) -> ResultadoGrade:
         """
-        Gera a grade de 8 anúncios (1/2/3/4un × Clássico/Premium).
+        Gera a grade de anúncios (1/2/3/4un × Clássico/Premium).
 
         Args:
             dados:                      dict do produto (formato BaseLinker)
             sku_ref:                    SKU para logs
             category_id:                category_id do ML para buscar comissão correta
             custo_saida_transportadora: obrigatório se peso > 30kg
+            limite_unidades:            limite de unidades por kit (padrão 4)
 
         Returns:
-            ResultadoGrade com 8 ResultadoAnuncio
+            ResultadoGrade com ResultadoAnuncio
         """
         engine = _get_engine(category_id)
         return engine.calcular_grade(
             dados,
             sku_ref=sku_ref,
             custo_saida_transportadora=custo_saida_transportadora,
-            vendas_60_dias=vendas_60_dias
+            vendas_60_dias=vendas_60_dias,
+            limite_unidades=limite_unidades,
         )
 
     # ── Cálculo simples (compatibilidade) ─────────────────────────────────────
