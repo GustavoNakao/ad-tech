@@ -36,15 +36,15 @@ PRICE_IDS: List[str] = [
 
 
 # =============================================================================
-# UTILITÃRIOS DE PÃS-PROCESSAMENTO (sem dependÃªncia de IA)
+# UTILITÁRIOS DE PÓS-PROCESSAMENTO (sem dependência de IA)
 # =============================================================================
 
-# SeÃ§Ãµes obrigatÃ³rias da descriÃ§Ã£o â usadas para validar a resposta da IA
+# Seções obrigatórias da descrição — usadas para validar a resposta da IA
 SECOES_OBRIGATORIAS = [
     "SOBRE O PRODUTO",
-    "BENEFÃCIOS",
+    "BENEFÍCIOS",
     "DIFERENCIAIS DO PRODUTO",
-    "DÃVIDAS FREQUENTES",
+    "DÚVIDAS FREQUENTES",
     "IDEAL PARA",
 ]
 
@@ -83,7 +83,7 @@ def ajustar_titulo(titulo: str, min_c: int = 55, max_c: int = 60) -> str:
 
 
 def formatar_title_case(titulo: str) -> str:
-    """Primeira letra de cada palavra maiÃºscula, resto minÃºsculo. Preserva siglas."""
+    """Primeira letra de cada palavra maiúscula, resto minúsculo. Preserva siglas."""
     SIGLAS = {"LED", "USB", "ML", "UV", "pH", "UHF", "VHF", "HDMI", "FM", "AM"}
     palavras = titulo.split()
     resultado = []
@@ -97,16 +97,16 @@ def formatar_title_case(titulo: str) -> str:
 
 def normalizar_texto_validador(texto: str) -> str:
     """
-    Normaliza o texto para comparaÃ§Ãµes robustas e flexÃveis de cabeÃ§alhos de seÃ§Ã£o:
+    Normaliza o texto para comparações robustas e flexíveis de cabeçalhos de seção:
     - Transforma em caixa baixa
     - Remove marcas de markdown (*, #, :, -, _, etc.)
-    - Remove acentos/diacrÃticos
-    - Normaliza mÃºltiplos espaÃ§os
+    - Remove acentos/diacríticos
+    - Normaliza múltiplos espaços
     """
     import unicodedata
     import re
     texto = (texto or "").lower()
-    # Remove marcas de markdown e pontuaÃ§Ãµes de tÃtulo
+    # Remove marcas de markdown e pontuações de título
     texto = re.sub(r'[*#:\-_]', ' ', texto)
     # Remove acentos
     texto_norm = unicodedata.normalize('NFD', texto)
@@ -114,30 +114,30 @@ def normalizar_texto_validador(texto: str) -> str:
     return " ".join(texto_sem_acentos.split())
 
 
-# VersÃµes normalizadas das seÃ§Ãµes para comparaÃ§Ã£o resiliente
+# Versões normalizadas das seções para comparação resiliente
 SECOES_OBRIGATORIAS_NORM = {
     "SOBRE O PRODUTO": "sobre o produto",
-    "BENEFÃCIOS": "beneficios",
+    "BENEFÍCIOS": "beneficios",
     "DIFERENCIAIS DO PRODUTO": "diferenciais do produto",
-    "DÃVIDAS FREQUENTES": "duvidas frequentes",
+    "DÚVIDAS FREQUENTES": "duvidas frequentes",
     "IDEAL PARA": "ideal para",
 }
 
 
 def validar_descricao(desc: str) -> bool:
-    """Verifica se todas as seÃ§Ãµes obrigatÃ³rias estÃ£o presentes na descriÃ§Ã£o de forma robusta e flexÃvel."""
+    """Verifica se todas as seções obrigatórias estão presentes na descrição de forma robusta e flexível."""
     desc_norm = normalizar_texto_validador(desc)
     return all(norm_val in desc_norm for norm_val in SECOES_OBRIGATORIAS_NORM.values())
 
 
 def normalizar_descricao(desc: str) -> str:
     """
-    Garante que a descriÃ§Ã£o sempre comece pela seÃ§Ã£o correta,
+    Garante que a descrição sempre comece pela seção correta,
     removendo qualquer lixo antes de 'SOBRE O PRODUTO'.
-    Suporta variaÃ§Ãµes de caixa e marcas de markdown.
+    Suporta variações de caixa e marcas de markdown.
     """
     desc_strip = desc.strip()
-    # Procura 'SOBRE O PRODUTO' de forma case-insensitive e flexÃvel em relaÃ§Ã£o a markdown/espaÃ§os/pontuaÃ§Ãµes
+    # Procura 'SOBRE O PRODUTO' de forma case-insensitive e flexível em relação a markdown/espaços/pontuações
     match = re.search(r'(?:[#*]*\s*)?(sobre\s+o\s+produto)(?:\s*[#*:]*)?', desc_strip, re.IGNORECASE)
     if match:
         idx = match.start()
@@ -152,84 +152,84 @@ def normalizar_descricao(desc: str) -> str:
 class SEOGenerator:
     """
     Orquestrador de Agentes Especializados para SEO e Compliance.
-    Usa Gemini 2.5 Flash para Compliance, TÃtulos e DescriÃ§Ã£o.
-    Usa Llama 3.1/3.3 (Groq) para Ficha TÃ©cnica e Keywords.
+    Usa Gemini 2.5 Flash para Compliance, Títulos e Descrição.
+    Usa Llama 3.1/3.3 (Groq) para Ficha Técnica e Keywords.
 
-    MUDANÃAS v2.1:
-    - Alterado TÃtulos e DescriÃ§Ã£o para Gemini 2.5 Flash (Google AI Studio).
-    - Temperatura 0.0 em todas as chamadas de geraÃ§Ã£o.
-    - ValidaÃ§Ã£o de caracteres feita 100% em Python.
-    - DescriÃ§Ã£o usa template fixo com marcadores.
+    MUDANÇAS v2.1:
+    - Alterado Títulos e Descrição para Gemini 2.5 Flash (Google AI Studio).
+    - Temperatura 0.0 em todas as chamadas de geração.
+    - Validação de caracteres feita 100% em Python.
+    - Descrição usa template fixo com marcadores.
     """
 
     # -------------------------------------------------------------------------
-    # AGENTE 1 â COMPLIANCE (Gemini)
+    # AGENTE 1 — COMPLIANCE (Gemini)
     # -------------------------------------------------------------------------
-    PROMPT_COMPLIANCE = """VocÃª Ã© um Auditor de Compliance SÃªnior do Mercado Livre Brasil com profundo conhecimento nas polÃticas de 2024/2025.
-Sua Ãºnica funÃ§Ã£o Ã© verificar se um produto pode ser anunciado na plataforma antes de qualquer geraÃ§Ã£o de conteÃºdo.
+    PROMPT_COMPLIANCE = """Você é um Auditor de Compliance Sênior do Mercado Livre Brasil com profundo conhecimento nas políticas de 2024/2025.
+Sua única função é verificar se um produto pode ser anunciado na plataforma antes de qualquer geração de conteúdo.
 
 ====================================
 CATEGORIAS PROIBIDAS - Bloqueie imediatamente
 ====================================
 
 FINANCEIRO
-- Moedas, cÃ©dulas antigas/comemorativas para venda como "investimento"
-- Cheques, cartÃµes clonados, maquinetas nÃ£o homologadas
+- Moedas, cédulas antigas/comemorativas para venda como "investimento"
+- Cheques, cartões clonados, maquinetas não homologadas
 - Criptomoedas, tokens, NFTs
 
 DIGITAL / SOFTWARE
 - Contas de streaming, jogos ou plataformas (Netflix, Spotify, etc.)
 - Senhas, acessos, convites
-- Softwares piratas, chaves de ativaÃ§Ã£o nÃ£o oficiais
+- Softwares piratas, chaves de ativação não oficiais
 - Chips desbloqueados, IPTV pirata
 
-SEGURANÃA E SAÃDE
-- Armas de fogo, muniÃ§Ãµes, simulacros funcionais
-- Explosivos, fogos de artifÃcio categoria 3 e 4
-- Produtos controlados pela ANVISA sem registro vÃ¡lido
-- Medicamentos sob prescriÃ§Ã£o, anabolizantes, hormÃ´nios
-- SubstÃ¢ncias psicoativas, entorpecentes
-- Equipamentos de vigilÃ¢ncia para uso ilegal (grampos, rastreadores ocultos)
+SEGURANÇA E SAÚDE
+- Armas de fogo, munições, simulacros funcionais
+- Explosivos, fogos de artifício categoria 3 e 4
+- Produtos controlados pela ANVISA sem registro válido
+- Medicamentos sob prescrição, anabolizantes, hormônios
+- Substâncias psicoativas, entorpecentes
+- Equipamentos de vigilância para uso ilegal (grampos, rastreadores ocultos)
 
 PROPRIEDADE INTELECTUAL
-- RÃ©plicas, falsificaÃ§Ãµes, imitaÃ§Ãµes de marcas registradas
+- Réplicas, falsificações, imitações de marcas registradas
 - Produtos com termo "inspired by", "estilo de", "modelo igual ao"
-- Itens sem nota fiscal de origem comprovÃ¡vel para marcas premium
+- Itens sem nota fiscal de origem comprovável para marcas premium
 
-NÃO-PRODUTO
-- ServiÃ§os, consultorias, freelances, cursos (exceto se plataforma habilitada)
-- CurrÃculos, templates de currÃculo
-- Promessas de resultado financeiro ou saÃºde
+NÃO-PRODUTO
+- Serviços, consultorias, freelances, cursos (exceto se plataforma habilitada)
+- Currículos, templates de currículo
+- Promessas de resultado financeiro ou saúde
 
 ADULTO
-- ConteÃºdo sexual explÃcito fora da categoria adulto habilitada
-- Produtos erÃ³ticos sem a categorizaÃ§Ã£o correta
+- Conteúdo sexual explícito fora da categoria adulto habilitada
+- Produtos eróticos sem a categorização correta
 
 ANIMAIS E MEIO AMBIENTE
-- EspÃ©cies silvestres, trÃ¡fico de animais
+- Espécies silvestres, tráfico de animais
 - Produtos de origem animal sem certificado IBAMA
-- Madeira nÃ£o certificada
+- Madeira não certificada
 
 ====================================
-ATENÃÃO - Falsos Positivos Comuns (NÃO bloqueie)
+ATENÇÃO - Falsos Positivos Comuns (NÃO bloqueie)
 ====================================
-- "Kit faca churrasco" -> PERMITIDO (utensÃlio domÃ©stico)
-- "Kit 2 copos Stanley" -> PERMITIDO (kit legÃtimo de produto permitido)
+- "Kit faca churrasco" -> PERMITIDO (utensílio doméstico)
+- "Kit 2 copos Stanley" -> PERMITIDO (kit legítimo de produto permitido)
 - "Kit 3 unidades faca de cozinha" -> PERMITIDO
-- "Stanley original" -> PERMITIDO (marca legÃtima com palavra "original")
-- "Garrafa tÃ©rmica 500ml" -> PERMITIDO
-- "RÃ©plica design vintage" -> BLOQUEADO (termo rÃ©plica = falsificaÃ§Ã£o)
+- "Stanley original" -> PERMITIDO (marca legítima com palavra "original")
+- "Garrafa térmica 500ml" -> PERMITIDO
+- "Réplica design vintage" -> BLOQUEADO (termo réplica = falsificação)
 - "Suplemento para emagrecer 10kg garantido" -> BLOQUEADO (promessa de resultado)
-- "Canivete camping" -> PERMITIDO (ferramenta de uso legÃtimo)
-- "Faca tÃ¡tica militar" -> AVALIAR CONTEXTO - se for utensÃlio de camping/pesca, permitido
+- "Canivete camping" -> PERMITIDO (ferramenta de uso legítimo)
+- "Faca tática militar" -> AVALIAR CONTEXTO - se for utensílio de camping/pesca, permitido
 
 ====================================
-INSTRUÃÃO DE ANÃLISE
+INSTRUÇÃO DE ANÁLISE
 ====================================
-1. Leia o nome e a descriÃ§Ã£o do produto
+1. Leia o nome e a descrição do produto
 2. Verifique contra TODAS as categorias proibidas
 3. Aplique o teste de falso positivo
-4. Se houver dÃºvida genuÃna, classifique como "revisar" para anÃ¡lise humana
+4. Se houver dúvida genuína, classifique como "revisar" para análise humana
 
 Responda EXCLUSIVAMENTE em JSON, sem texto adicional, sem markdown:
 
@@ -237,13 +237,13 @@ Se aprovado:
 {"status": "ok", "observacao": "breve nota se relevante ou null"}
 
 Se bloqueado:
-{"status": "bloqueado", "motivo": "ExplicaÃ§Ã£o clara em 1 frase", "categoria": "Nome da categoria proibida"}
+{"status": "bloqueado", "motivo": "Explicação clara em 1 frase", "categoria": "Nome da categoria proibida"}
 
-Se precisar de revisÃ£o humana:
-{"status": "revisar", "motivo": "Motivo da dÃºvida em 1 frase", "categoria": "Categoria suspeita"}"""
+Se precisar de revisão humana:
+{"status": "revisar", "motivo": "Motivo da dúvida em 1 frase", "categoria": "Categoria suspeita"}"""
 
     # -------------------------------------------------------------------------
-    # AGENTE 2A â TÃTULO UNITÃRIO (Groq, temperatura 0.0)
+    # AGENTE 2A — TÍTULO UNITÁRIO (Groq, temperatura 0.0)
     # -------------------------------------------------------------------------
     PROMPT_TITULO = """Você é um Especialista em SEO para Mercado Livre Brasil.
 Sua única tarefa é gerar um ttulo neutro e descritivo para o produto fornecido.
@@ -270,7 +270,7 @@ Responda EXCLUSIVAMENTE em JSON:
 {"titulo": "ttulo aqui"}"""
 
     # -------------------------------------------------------------------------
-    # AGENTE 2B  GRADE DE 8 TÍTULOS (Groq, temperatura 0.0)
+    # AGENTE 2B — GRADE DE 8 TÍTULOS (Groq, temperatura 0.0)
     # -------------------------------------------------------------------------
     PROMPT_TITULO_KITS = """Você é um Especialista em SEO para Mercado Livre Brasil.
 Sua tarefa é gerar 8 ttulos base únicos e altamente otimizados seguindo estritamente a estrutura neutra e descritiva.
@@ -310,150 +310,150 @@ Responda EXCLUSIVAMENTE em JSON. Você DEVE escrever a 'estrategia_seo' antes de
 
 
     # -------------------------------------------------------------------------
-    # AGENTE 4  FICHA TÉCNICA / ATRIBUTOS (Groq)
+    # AGENTE 4 — FICHA TÉCNICA / ATRIBUTOS (Groq)
     # -------------------------------------------------------------------------
-    PROMPT_TECH = """VocÃª Ã© um Analista de Dados TÃ©cnicos especialista em fichas de produto
-para e-commerce e marketplaces brasileiros. Sua funÃ§Ã£o Ã© extrair, inferir
-e padronizar atributos tÃ©cnicos a partir de qualquer tipo de texto sobre
-produtos (tÃtulo, descriÃ§Ã£o, bullet points, nome de arquivo, SKU, etc.).
+    PROMPT_TECH = """Você é um Analista de Dados Técnicos especialista em fichas de produto
+para e-commerce e marketplaces brasileiros. Sua função é extrair, inferir
+e padronizar atributos técnicos a partir de qualquer tipo de texto sobre
+produtos (título, descrição, bullet points, nome de arquivo, SKU, etc.).
 
 ====================================
-ETAPA 0 â DETECÃÃO DE MODELO
+ETAPA 0 — DETECÇÃO DE MODELO
 ====================================
 Antes de preencher os campos solicitados, identifique o MODELO do produto.
-O modelo Ã© o identificador especÃfico que diferencia variantes de uma mesma
+O modelo é o identificador específico que diferencia variantes de uma mesma
 linha (ex: "Classic 1.0", "AX-500", "Pro Max 64GB").
 
-EstratÃ©gias de detecÃ§Ã£o (aplique nesta ordem):
+Estratégias de detecção (aplique nesta ordem):
 
-  A) CÃDIGO ALFANUMÃRICO no tÃtulo ou SKU
-     PadrÃ£o: sequÃªncia com letras + nÃºmeros separados por hÃfen, ponto ou
-     espaÃ§o apÃ³s a marca.
+  A) CÓDIGO ALFANUMÉRICO no título ou SKU
+     Padrão: sequência com letras + números separados por hífen, ponto ou
+     espaço após a marca.
      Exemplos:
-       "Stanley ADVC-10" â Modelo: "ADVC-10"
-       "Tramontina 29899-083" â Modelo: "29899-083"
-       "Nike Air Max 90" â Modelo: "Air Max 90"
+       "Stanley ADVC-10" → Modelo: "ADVC-10"
+       "Tramontina 29899-083" → Modelo: "29899-083"
+       "Nike Air Max 90" → Modelo: "Air Max 90"
 
-  B) NOME DE LINHA / SÃRIE explÃcito
-     Palavras que denotam sÃ©rie apÃ³s a marca ou categoria.
+  B) NOME DE LINHA / SÉRIE explícito
+     Palavras que denotam série após a marca ou categoria.
      Exemplos:
-       "Garrafa Stanley Classic" â Modelo: "Classic"
-       "Faca Tramontina Century" â Modelo: "Century"
+       "Garrafa Stanley Classic" → Modelo: "Classic"
+       "Faca Tramontina Century" → Modelo: "Century"
 
-  C) ESPECIFICAÃÃO TÃCNICA IDENTIFICADORA
-     Quando o modelo Ã© descrito sÃ³ por capacidade/tamanho e nÃ£o hÃ¡ nome.
+  C) ESPECIFICAÇÃO TÉCNICA IDENTIFICADORA
+     Quando o modelo é descrito só por capacidade/tamanho e não há nome.
      Exemplos:
-       "Garrafa Inox 750ml" (sem cÃ³digo) â Modelo: "750 ml (inferido)"
+       "Garrafa Inox 750ml" (sem código) → Modelo: "750 ml (inferido)"
 
-  D) NÃO IDENTIFICÃVEL
-     Se nenhuma estratÃ©gia encontrar o modelo â omita a chave "Modelo"
-     (ou use "NÃ£o informado" se marcado como [OBRIGATÃRIO]).
+  D) NÃO IDENTIFICÁVEL
+     Se nenhuma estratégia encontrar o modelo → omita a chave "Modelo"
+     (ou use "Não informado" se marcado como [OBRIGATÓRIO]).
 
 Sempre inclua "Modelo" como primeiro campo do JSON de atributos.
 
 ====================================
-ETAPA 1 â HIERARQUIA DE PREENCHIMENTO
+ETAPA 1 — HIERARQUIA DE PREENCHIMENTO
 ====================================
 Para cada campo da lista "Campos Solicitados":
 
-  1. EXPLÃCITO  â valor mencionado diretamente no texto.
-                  Extraia e padronize conforme seÃ§Ã£o PADRONIZAÃÃO.
+  1. EXPLÍCITO  → valor mencionado diretamente no texto.
+                  Extraia e padronize conforme seção PADRONIZAÇÃO.
 
-  2. INFERÃVEL  â dedutÃvel com alta confianÃ§a a partir do contexto.
+  2. INFERÍVEL  → dedutível com alta confiança a partir do contexto.
                   Acrescente " (inferido)" ao valor.
-                  EXCEÃÃO: campos com lista de Valores Permitidos â
+                  EXCEÇÃO: campos com lista de Valores Permitidos →
                   escolha o valor mais adequado da lista SEM sufixo.
 
-  3. ENRIQUECÃVEL â vocÃª conhece o produto/marca e pode preencher com
+  3. ENRIQUECÍVEL → você conhece o produto/marca e pode preencher com
                   conhecimento de mercado (ex: marca conhecida, voltagem
-                  padrÃ£o do segmento).
+                  padrão do segmento).
                   Acrescente " (conhecimento de mercado)" ao valor.
-                  EXCEÃÃO: mesma regra das listas de valores permitidos.
+                  EXCEÇÃO: mesma regra das listas de valores permitidos.
 
-  4. AUSENTE    â omita a chave do JSON.
-                  EXCEÃÃO: campos [OBRIGATÃRIO] â use "NÃ£o informado".
+  4. AUSENTE    → omita a chave do JSON.
+                  EXCEÇÃO: campos [OBRIGATÓRIO] → use "Não informado".
 
-Prioridade de confianÃ§a: ExplÃcito > InferÃvel > EnriquecÃvel > Ausente.
-
-====================================
-ETAPA 2 â VALIDAÃÃO ANTES DE RETORNAR
-====================================
-Antes de gerar o JSON final, faÃ§a internamente estas verificaÃ§Ãµes:
-
-  â O campo "Modelo" estÃ¡ presente e Ã© o primeiro?
-  â Cada chave bate exatamente com o nome em "Campos Solicitados"?
-  â Campos com Valores Permitidos usam exatamente um valor da lista?
-  â Nenhum campo contÃ©m null, "", "N/A", "Desconhecido" ou similar?
-  â Campos ausentes sem [OBRIGATÃRIO] foram omitidos (nÃ£o retornados)?
-  â Medidas tÃªm nÃºmero + espaÃ§o + unidade?
-  â NÃ£o hÃ¡ EAN, GTIN ou CÃ³digo de barras no JSON?
+Prioridade de confiança: Explícito > Inferível > Enriquecível > Ausente.
 
 ====================================
-REGRAS CRÃTICAS
+ETAPA 2 — VALIDAÇÃO ANTES DE RETORNAR
+====================================
+Antes de gerar o JSON final, faça internamente estas verificações:
+
+  ✓ O campo "Modelo" está presente e é o primeiro?
+  ✓ Cada chave bate exatamente com o nome em "Campos Solicitados"?
+  ✓ Campos com Valores Permitidos usam exatamente um valor da lista?
+  ✓ Nenhum campo contém null, "", "N/A", "Desconhecido" ou similar?
+  ✓ Campos ausentes sem [OBRIGATÓRIO] foram omitidos (não retornados)?
+  ✓ Medidas têm número + espaço + unidade?
+  ✓ Não há EAN, GTIN ou Código de barras no JSON?
+
+====================================
+REGRAS CRÍTICAS
 ====================================
 R1. Use EXATAMENTE os nomes de atributos fornecidos em "Campos Solicitados".
 R2. Campos com "Valores Permitidos": escolha EXATAMENTE um valor da lista.
     Nunca combine, abrevie ou invente termos fora da lista.
-R3. Conflito texto Ã lista â priorize a lista (valor mais prÃ³ximo
+R3. Conflito texto × lista → priorize a lista (valor mais próximo
     semanticamente).
-R4. NUNCA extraia: "CÃ³digo de barras", "EAN", "GTIN" ou "Motivo de GTIN
-    vazio". O sistema preenche a identificaÃ§Ã£o automaticamente via API.
-R5. NUNCA invente valores sem base no texto, inferÃªncia lÃ³gica clara
-    ou conhecimento de mercado verificÃ¡vel.
+R4. NUNCA extraia: "Código de barras", "EAN", "GTIN" ou "Motivo de GTIN
+    vazio". O sistema preenche a identificação automaticamente via API.
+R5. NUNCA invente valores sem base no texto, inferência lógica clara
+    ou conhecimento de mercado verificável.
 
 ====================================
-PADRONIZAÃÃO DE VALORES
+PADRONIZAÇÃO DE VALORES
 ====================================
-- Idioma       : PortuguÃªs brasileiro.
-                 â "Preto"  â "Black" | â "Azul marinho"  â "Navy"
-- Medidas      : nÃºmero + espaÃ§o + unidade â "500 ml", "15 cm", "2 kg"
-- Booleanos    : "Sim" ou "NÃ£o"
-- Voltagem     : "110V" | "220V" | "Bivolt" | "NÃ£o se aplica"
-- Marcas       : capitalizaÃ§Ã£o correta â "Stanley", "3M", "Tramontina"
-- Cores        : primeira letra maiÃºscula â "Preto", "Inox", "Chumbo"
-- Modelo       : preserve o cÃ³digo original (maiÃºsculas, hÃfens, pontos)
+- Idioma       : Português brasileiro.
+                 ✓ "Preto"  ✗ "Black" | ✓ "Azul marinho"  ✗ "Navy"
+- Medidas      : número + espaço + unidade → "500 ml", "15 cm", "2 kg"
+- Booleanos    : "Sim" ou "Não"
+- Voltagem     : "110V" | "220V" | "Bivolt" | "Não se aplica"
+- Marcas       : capitalização correta → "Stanley", "3M", "Tramontina"
+- Cores        : primeira letra maiúscula → "Preto", "Inox", "Chumbo"
+- Modelo       : preserve o código original (maiúsculas, hífens, pontos)
 
 ====================================
 EXEMPLO COMPLETO
 ====================================
 Campos Solicitados:
-  - Material [OBRIGATÃRIO]
-    (Valores Permitidos: "Inox", "PlÃ¡stico", "Vidro", "AlumÃnio")
-  - Capacidade [OBRIGATÃRIO]
+  - Material [OBRIGATÓRIO]
+    (Valores Permitidos: "Inox", "Plástico", "Vidro", "Alumínio")
+  - Capacidade [OBRIGATÓRIO]
   - Cor
   - Voltagem
   - Peso
 
 Texto de entrada:
-  "Garrafa TÃ©rmica Stanley Classic 1.0 AÃ§o Inox 750ml Grafite ADVC-10"
+  "Garrafa Térmica Stanley Classic 1.0 Aço Inox 750ml Grafite ADVC-10"
 
-SaÃda esperada:
+Saída esperada:
 {
   "atributos": {
     "Modelo": "ADVC-10",
     "Material": "Inox",
     "Capacidade": "750 ml",
     "Cor": "Grafite",
-    "Voltagem": "NÃ£o se aplica",
-    "Peso": "NÃ£o informado"
+    "Voltagem": "Não se aplica",
+    "Peso": "Não informado"
   }
 }
 
 Notas do exemplo:
-- "Modelo" detectado pela estratÃ©gia A (cÃ³digo alfanumÃ©rico "ADVC-10").
-- "Material" veio da lista â sem sufixo.
-- "Cor" estava explÃcita â sem sufixo.
+- "Modelo" detectado pela estratégia A (código alfanumérico "ADVC-10").
+- "Material" veio da lista → sem sufixo.
+- "Cor" estava explícita → sem sufixo.
 - "Voltagem" preenchida por conhecimento de mercado (garrafa = sem
-  elÃ©trica) â valor da lista, sem sufixo.
-- "Peso" ausente + [OBRIGATÃRIO] â "NÃ£o informado".
-- "Classic 1.0" ignorado no Modelo pois "ADVC-10" Ã© mais especÃfico
-  (estratÃ©gia A tem prioridade sobre B).
+  elétrica) → valor da lista, sem sufixo.
+- "Peso" ausente + [OBRIGATÓRIO] → "Não informado".
+- "Classic 1.0" ignorado no Modelo pois "ADVC-10" é mais específico
+  (estratégia A tem prioridade sobre B).
 
 ====================================
-FORMATO DE SAÃDA
+FORMATO DE SAÍDA
 ====================================
-Responda EXCLUSIVAMENTE em JSON vÃ¡lido, sem texto adicional,
-sem markdown, sem comentÃ¡rios:
+Responda EXCLUSIVAMENTE em JSON válido, sem texto adicional,
+sem markdown, sem comentários:
 {
   "atributos": {
     "Modelo": "...",
@@ -462,57 +462,57 @@ sem markdown, sem comentÃ¡rios:
 }"""
 
     # -------------------------------------------------------------------------
-    # AGENTE 5 â PALAVRAS-CHAVE / SEO (Groq)
+    # AGENTE 5 — PALAVRAS-CHAVE / SEO (Groq)
     # -------------------------------------------------------------------------
-    PROMPT_KEYWORDS = """VocÃª Ã© um Especialista em Search Intelligence para marketplaces brasileiros com foco em Mercado Livre e Google Shopping.
-Sua funÃ§Ã£o Ã© identificar os termos de busca mais relevantes para maximizar o ranqueamento orgÃ¢nico do anÃºncio.
+    PROMPT_KEYWORDS = """Você é um Especialista em Search Intelligence para marketplaces brasileiros com foco em Mercado Livre e Google Shopping.
+Sua função é identificar os termos de busca mais relevantes para maximizar o ranqueamento orgânico do anúncio.
 
 ====================================
-PRINCÃPIOS DO ALGORITMO DO ML
+PRINCÍPIOS DO ALGORITMO DO ML
 ====================================
 O Mercado Livre ranqueia com base em:
-1. RelevÃ¢ncia do tÃtulo com o termo buscado
-2. Velocidade de vendas e taxa de conversÃ£o
-3. ReputaÃ§Ã£o do vendedor
-4. Qualidade e completude do anÃºncio
-5. Palavras-chave presentes na descriÃ§Ã£o
+1. Relevância do título com o termo buscado
+2. Velocidade de vendas e taxa de conversão
+3. Reputação do vendedor
+4. Qualidade e completude do anúncio
+5. Palavras-chave presentes na descrição
 
 ====================================
-LÃGICA DE KITS - OBRIGATÃRIO
+LÓGICA DE KITS - OBRIGATÓRIO
 ====================================
 Para kits com 2, 3 ou 4 unidades, inclua obrigatoriamente:
 - "kit 2 [produto]", "kit 3 [produto]", "kit 4 [produto]"
 - "conjunto 2 [produto]", "conjunto 3 [produto]"
 - "par de [produto]" quando kit 2 fizer sentido
-- O produto unitÃ¡rio tambÃ©m (base para variaÃ§Ãµes de busca)
+- O produto unitário também (base para variações de busca)
 
 ====================================
 CATEGORIAS DE TERMOS - Gere para cada uma
 ====================================
 
-TERMOS PRIMÃRIOS (alta intenÃ§Ã£o de compra)
+TERMOS PRIMÁRIOS (alta intenção de compra)
 - Como o comprador pesquisa o produto principal
 - Marca + produto quando a marca for relevante para busca
 
-TERMOS SECUNDÃRIOS (long tail, menor concorrÃªncia)
+TERMOS SECUNDÁRIOS (long tail, menor concorrência)
 - Com atributos: material, capacidade, cor, tamanho
-- CombinaÃ§Ãµes de 3-4 palavras
+- Combinações de 3-4 palavras
 
-TERMOS DE KIT (se aplicÃ¡vel)
+TERMOS DE KIT (se aplicável)
 - "kit N [produto]", "conjunto N [produto]", "N unidades [produto]"
 
-TERMOS ALTERNATIVOS (como o pÃºblico leigo pesquisa)
-- SinÃ´nimos, nomes populares, variaÃ§Ãµes ortogrÃ¡ficas relevantes
+TERMOS ALTERNATIVOS (como o público leigo pesquisa)
+- Sinônimos, nomes populares, variações ortográficas relevantes
 
 ====================================
 REGRAS DE QUALIDADE
 ====================================
-- Todos os termos em letras minÃºsculas
-- Sem pontuaÃ§Ã£o ou sÃmbolos
-- Sem termos genÃ©ricos vazios: "produto bom", "qualidade Ã³tima"
-- Sem termos proibidos: preÃ§o, frete, garantia, promoÃ§Ã£o
-- MÃ¡ximo 4 palavras por termo
-- MÃnimo 12 termos, mÃ¡ximo 25
+- Todos os termos em letras minúsculas
+- Sem pontuação ou símbolos
+- Sem termos genéricos vazios: "produto bom", "qualidade ótima"
+- Sem termos proibidos: preço, frete, garantia, promoção
+- Máximo 4 palavras por termo
+- Mínimo 12 termos, máximo 25
 
 Analise o produto abaixo e gere a lista de termos.
 Responda EXCLUSIVAMENTE em JSON, sem texto adicional, sem markdown:
@@ -526,91 +526,91 @@ Responda EXCLUSIVAMENTE em JSON, sem texto adicional, sem markdown:
 }"""
 
     # -------------------------------------------------------------------------
-    # AGENTE 6 â COPYWRITER / DESCRIÃÃO (Groq, temperatura 0.0)
+    # AGENTE 6 — COPYWRITER / DESCRIÇÃO (Groq, temperatura 0.0)
     #
-    # MUDANÃA PRINCIPAL: O template de seÃ§Ãµes Ã© FIXO com marcadores exatos.
-    # A IA preenche o conteÃºdo entre os marcadores â nunca altera os cabeÃ§alhos.
+    # MUDANÇA PRINCIPAL: O template de seções é FIXO com marcadores exatos.
+    # A IA preenche o conteúdo entre os marcadores — nunca altera os cabeçalhos.
     # -------------------------------------------------------------------------
-    PROMPT_COPY = """VocÃª Ã© um Copywriter Profissional de E-commerce especialista em conversÃ£o no Mercado Livre Brasil.
-Sua tarefa Ã© criar uma descriÃ§Ã£o persuasiva, tÃ©cnica e otimizada para o produto fornecido.
+    PROMPT_COPY = """Você é um Copywriter Profissional de E-commerce especialista em conversão no Mercado Livre Brasil.
+Sua tarefa é criar uma descrição persuasiva, técnica e otimizada para o produto fornecido.
 
 ====================================
-ANÃLISE PRÃVIA OBRIGATÃRIA DO PRODUTO
+ANÁLISE PRÉVIA OBRIGATÓRIA DO PRODUTO
 ====================================
 Antes de escrever qualquer linha, analise o produto fornecido e extraia internamente:
 
-A) PROBLEMA CENTRAL â qual dor, necessidade ou desejo o produto resolve?
-B) PÃBLICO-ALVO â quem compra esse produto e em que situaÃ§Ã£o?
-C) DIFERENCIAIS REAIS â o que torna esse produto diferente dos concorrentes genÃ©ricos?
-D) CONDIÃÃES DE USO â onde, como e quando o produto Ã© utilizado?
-E) OBJEÃÃES COMUNS â quais dÃºvidas ou medos o comprador tÃpico teria antes de comprar?
+A) PROBLEMA CENTRAL — qual dor, necessidade ou desejo o produto resolve?
+B) PÚBLICO-ALVO — quem compra esse produto e em que situação?
+C) DIFERENCIAIS REAIS — o que torna esse produto diferente dos concorrentes genéricos?
+D) CONDIÇÕES DE USO — onde, como e quando o produto é utilizado?
+E) OBJEÇÕES COMUNS — quais dúvidas ou medos o comprador típico teria antes de comprar?
 
-Essa anÃ¡lise deve guiar todo o texto. Nunca escreva de forma genÃ©rica.
+Essa análise deve guiar todo o texto. Nunca escreva de forma genérica.
 
 ====================================
-TEMPLATE OBRIGATÃRIO (preencha EXATAMENTE nesta estrutura)
+TEMPLATE OBRIGATÓRIO (preencha EXATAMENTE nesta estrutura)
 ====================================
-VocÃª DEVE retornar o texto usando EXATAMENTE os cabeÃ§alhos abaixo, na mesma ordem, sem alterar nenhum deles:
+Você DEVE retornar o texto usando EXATAMENTE os cabeçalhos abaixo, na mesma ordem, sem alterar nenhum deles:
 
 SOBRE O PRODUTO
-[ParÃ¡grafo de abertura com gancho emocional ou situacional. Apresente o produto pelo nome completo e posicione-o como a soluÃ§Ã£o ideal.]
+[Parágrafo de abertura com gancho emocional ou situacional. Apresente o produto pelo nome completo e posicione-o como a solução ideal.]
 
-[ParÃ¡grafo de descriÃ§Ã£o tÃ©cnica humanizada. Explique como o produto funciona, conectando caracterÃsticas a benefÃcios reais.]
+[Parágrafo de descrição técnica humanizada. Explique como o produto funciona, conectando características a benefícios reais.]
 
-[ParÃ¡grafo de diferencial competitivo. Compare indiretamente com alternativas inferiores, sem citar concorrentes.]
+[Parágrafo de diferencial competitivo. Compare indiretamente com alternativas inferiores, sem citar concorrentes.]
 
-[ParÃ¡grafo de contexto de uso expandido. Amplie os cenÃ¡rios de aplicaÃ§Ã£o alÃ©m do Ã³bvio.]
+[Parágrafo de contexto de uso expandido. Amplie os cenários de aplicação além do óbvio.]
 
-BENEFÃCIOS
-- [Verbo de aÃ§Ã£o + resultado concreto]
-- [Verbo de aÃ§Ã£o + resultado concreto]
-- [Verbo de aÃ§Ã£o + resultado concreto]
-- [Verbo de aÃ§Ã£o + resultado concreto]
-- [Verbo de aÃ§Ã£o + resultado concreto]
-- [Verbo de aÃ§Ã£o + resultado concreto]
+BENEFÍCIOS
+- [Verbo de ação + resultado concreto]
+- [Verbo de ação + resultado concreto]
+- [Verbo de ação + resultado concreto]
+- [Verbo de ação + resultado concreto]
+- [Verbo de ação + resultado concreto]
+- [Verbo de ação + resultado concreto]
 
 DIFERENCIAIS DO PRODUTO
-- [CaracterÃstica tÃ©cnica] â [por que isso importa para o comprador]
-- [CaracterÃstica tÃ©cnica] â [por que isso importa para o comprador]
-- [CaracterÃstica tÃ©cnica] â [por que isso importa para o comprador]
-- [CaracterÃstica tÃ©cnica] â [por que isso importa para o comprador]
-- [CaracterÃstica tÃ©cnica] â [por que isso importa para o comprador]
+- [Característica técnica] — [por que isso importa para o comprador]
+- [Característica técnica] — [por que isso importa para o comprador]
+- [Característica técnica] — [por que isso importa para o comprador]
+- [Característica técnica] — [por que isso importa para o comprador]
+- [Característica técnica] — [por que isso importa para o comprador]
 
-DÃVIDAS FREQUENTES
+DÚVIDAS FREQUENTES
 P: [Pergunta direta como o comprador faria]
-R: [Resposta curta, confiante e que elimine a dÃºvida completamente]
-
-P: [Pergunta direta como o comprador faria]
-R: [Resposta curta, confiante e que elimine a dÃºvida completamente]
+R: [Resposta curta, confiante e que elimine a dúvida completamente]
 
 P: [Pergunta direta como o comprador faria]
-R: [Resposta curta, confiante e que elimine a dÃºvida completamente]
+R: [Resposta curta, confiante e que elimine a dúvida completamente]
+
+P: [Pergunta direta como o comprador faria]
+R: [Resposta curta, confiante e que elimine a dúvida completamente]
 
 O QUE VEM NO KIT
 - [Produto 1] x [Quantidade]
 
 IDEAL PARA
-[ParÃ¡grafo Ãºnico de fechamento consolidando usos, pÃºblicos e situaÃ§Ãµes onde o produto se destaca. Finalize com afirmaÃ§Ã£o de autoridade ou qualidade que reforce a decisÃ£o de compra.]
+[Parágrafo único de fechamento consolidando usos, públicos e situações onde o produto se destaca. Finalize com afirmação de autoridade ou qualidade que reforce a decisão de compra.]
 
 ====================================
 DIRETRIZES DE ESTILO
 ====================================
-- Tom: Profissional, confiÃ¡vel e prÃ³ximo.
-- Proibido usar: "O melhor do mundo", "PreÃ§o imbatÃvel", "Entrega rÃ¡pida", "Qualidade incomparÃ¡vel", "NÃ£o perca", "Compre agora".
-- Proibido usar adjetivos vazios sem comprovaÃ§Ã£o: "incrÃvel", "fantÃ¡stico", "revolucionÃ¡rio", "surpreendente".
-- Cada seÃ§Ã£o deve parecer escrita especificamente para este produto. Texto genÃ©rico Ã© PROIBIDO.
+- Tom: Profissional, confiável e próximo.
+- Proibido usar: "O melhor do mundo", "Preço imbatível", "Entrega rápida", "Qualidade incomparável", "Não perca", "Compre agora".
+- Proibido usar adjetivos vazios sem comprovação: "incrível", "fantástico", "revolucionário", "surpreendente".
+- Cada seção deve parecer escrita especificamente para este produto. Texto genérico é PROIBIDO.
 - Use linguagem ativa e direta. Evite voz passiva.
-- Bullet points curtos, diretos e escaneÃ¡veis em celular.
-- NUNCA inclua nÃºmeros soltos de cÃ³digo de barras (EAN/SKU) no texto.
+- Bullet points curtos, diretos e escaneáveis em celular.
+- NUNCA inclua números soltos de código de barras (EAN/SKU) no texto.
 - Escreva de forma fluida (ex: "Kit com 4 pacotes de Feltro Preto" em vez de "4 unidades de Kit Feltro Pct C/40").
-- MÃ¡ximo de 2800 caracteres no total.
-- Os BENEFÃCIOS devem comeÃ§ar com verbo de aÃ§Ã£o no presente: Garante, Elimina, Protege, Facilita, Oferece...
-- Os DIFERENCIAIS devem conectar caracterÃstica + benefÃcio com " â ".
-- NUNCA altere, reordene ou renomeie os cabeÃ§alhos de seÃ§Ã£o.
+- Máximo de 2800 caracteres no total.
+- Os BENEFÍCIOS devem começar com verbo de ação no presente: Garante, Elimina, Protege, Facilita, Oferece...
+- Os DIFERENCIAIS devem conectar característica + benefício com " — ".
+- NUNCA altere, reordene ou renomeie os cabeçalhos de seção.
 
-Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
+Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
 {
-  "descricao": "Texto completo da descriÃ§Ã£o com quebras de linha \\n"
+  "descricao": "Texto completo da descrição com quebras de linha \\n"
 }"""
 
     MAX_NOME = 60
@@ -620,7 +620,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
         self.groq   = groq or GroqClient()
 
     # -------------------------------------------------------------------------
-    # MÃ©todo principal
+    # Método principal
     # -------------------------------------------------------------------------
 
     def gerar_conteudo(
@@ -639,7 +639,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
         if not nome_original.strip():
             return {"titulo": "", "descricao": descricao_atual or "", "atributos": {}}
 
-        # Limpa cÃ³digos EAN/SKU ou barras do inÃcio do nome
+        # Limpa códigos EAN/SKU ou barras do início do nome
         nome_limpo = re.sub(r'^[\d\s\|\-]+', '', nome_original).strip()
         if not nome_limpo:
             nome_limpo = nome_original
@@ -652,7 +652,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
         logger.info(f"[Agente 1] Compliance: {nome_original[:50]}...")
         res_comp = self.gemini.chat(system_prompt=self.PROMPT_COMPLIANCE, user_input=contexto)
         if not res_comp:
-            raise ValueError("ServiÃ§o de Compliance indisponÃvel.")
+            raise ValueError("Serviço de Compliance indisponível.")
 
         try:
             data_comp = json.loads(res_comp.strip())
@@ -664,30 +664,30 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
         except json.JSONDecodeError:
             logger.error(f"Erro JSON Compliance: {res_comp}")
 
-        # --- AGENTE 2: TÃTULOS (Groq, temperatura 0.0) ---
+        # --- AGENTE 2: TÍTULOS (Groq, temperatura 0.0) ---
         if gera_grade:
             titulo, titulos_grade = self._gerar_grade_titulos(contexto, nome_original)
         else:
             titulo, titulos_grade = self._gerar_titulo_unitario(contexto, nome_original)
 
-        # --- AGENTE 6: DESCRIÃÃO (Gemini 2.5 Flash) ---
-        logger.info("[Agente 3] Gerando DescriÃ§Ã£o Copywriter (Gemini 2.5 Flash)...")
+        # --- AGENTE 6: DESCRIÇÃO (Gemini 2.5 Flash) ---
+        logger.info("[Agente 3] Gerando Descrição Copywriter (Gemini 2.5 Flash)...")
         desc = self._gerar_descricao(titulo, contexto, descricao_atual)
 
-        # --- AGENTE 4: FICHA TÃCNICA (Groq) ---
-        logger.info("[Agente 4] Extraindo Ficha TÃ©cnica (Groq)...")
+        # --- AGENTE 4: FICHA TÉCNICA (Groq) ---
+        logger.info("[Agente 4] Extraindo Ficha Técnica (Groq)...")
         atribs = self._gerar_ficha_tecnica(contexto, atributos_obrigatorios)
 
         # --- AGENTE 5: PALAVRAS-CHAVE (Groq) ---
         logger.info("[Agente 5] Identificando Palavras-chave SEO (Groq)...")
         keywords_data = self._gerar_keywords(titulo, contexto)
 
-        # ValidaÃ§Ã£o de termos proibidos
+        # Validação de termos proibidos
         v_nome = TermosProibidos.verificar(titulo)
         if v_nome["bloqueado"]:
-            raise ValueError(f"TÃtulo proibido: {v_nome['termo']}")
+            raise ValueError(f"Título proibido: {v_nome['termo']}")
 
-        # FormataÃ§Ã£o final do tÃtulo
+        # Formatação final do título
         titulo = formatar_title_case(titulo)
 
         return {
@@ -699,13 +699,13 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
         }
 
     # -------------------------------------------------------------------------
-    # SubmÃ©todos internos
+    # Submétodos internos
     # -------------------------------------------------------------------------
 
     def _gerar_titulo_unitario(self, contexto: str, nome_original: str):
         """
-        Gera um tÃtulo unitÃ¡rio via Gemini 2.5 Flash.
-        A validaÃ§Ã£o de caracteres Ã© feita 100% em Python.
+        Gera um título unitário via Gemini 2.5 Flash.
+        A validação de caracteres é feita 100% em Python.
         """
         import json
 
@@ -717,7 +717,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
         for tentativa in range(max_tentativas):
             input_prompt = contexto
             if feedback_erro:
-                input_prompt += f"\n\nATENÃÃO: A tentativa anterior gerou um tÃtulo com {feedback_erro}. Ajuste o comprimento e tente novamente."
+                input_prompt += f"\n\nATENÇÃO: A tentativa anterior gerou um título com {feedback_erro}. Ajuste o comprimento e tente novamente."
 
             res_tit = self.gemini.chat(
                 system_prompt=self.PROMPT_TITULO,
@@ -737,19 +737,19 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
                 tamanho = len(t_temp)
                 if 55 <= tamanho <= 60:
                     titulo = t_temp
-                    logger.info(f"TÃtulo unitÃ¡rio aprovado ({tamanho} chars) na tentativa {tentativa + 1}: {titulo}")
+                    logger.info(f"Título unitário aprovado ({tamanho} chars) na tentativa {tentativa + 1}: {titulo}")
                     break
                 else:
                     feedback_erro = f"{tamanho} caracteres (precisa de 55 a 60)"
                     logger.warning(f"Tentativa {tentativa + 1}: {feedback_erro}")
 
-                    # Na Ãºltima tentativa: aplica ajuste por Python
+                    # Na última tentativa: aplica ajuste por Python
                     if tentativa == max_tentativas - 1:
                         titulo = ajustar_titulo(t_temp)
                         logger.warning(f"Fallback Python aplicado: {titulo!r} ({len(titulo)} chars)")
 
             except Exception as e:
-                feedback_erro = f"JSON invÃ¡lido: {e}"
+                feedback_erro = f"JSON inválido: {e}"
                 logger.warning(f"Tentativa {tentativa + 1}: {feedback_erro}")
 
         if not titulo:
@@ -759,7 +759,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
 
     def _gerar_grade_titulos(self, contexto: str, nome_original: str):
         """
-        Gera a grade de 8 tÃtulos via Gemini 2.5 Flash.
+        Gera a grade de 8 títulos via Gemini 2.5 Flash.
         A IA gera apenas a base otimizada. O Python mapeia e finaliza.
         """
         import json
@@ -771,7 +771,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
         for tentativa in range(max_tentativas):
             input_prompt = contexto
             if feedback_erro:
-                input_prompt += f"\n\nATENÃÃO â Erros na tentativa anterior:\n{feedback_erro}\nCorrija no prÃ³ximo JSON."
+                input_prompt += f"\n\nATENÇÃO — Erros na tentativa anterior:\n{feedback_erro}\nCorrija no próximo JSON."
 
             res_tit = self.gemini.chat(
                 system_prompt=self.PROMPT_TITULO_KITS,
@@ -805,21 +805,21 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
                     texto_titulo = str(titulos_brutos.get(chave_ia, "")).strip()
                     titulos_temp[chave_sistema] = formatar_title_case(texto_titulo)
 
-                # Verifica se todos os 8 tÃtulos foram gerados
+                # Verifica se todos os 8 títulos foram gerados
                 faltantes = [k for k, v in titulos_temp.items() if not v]
                 if not faltantes:
                     titulos_grade = titulos_temp
-                    logger.info(f"Grade aprovada na tentativa {tentativa + 1}. EstratÃ©gia SEO utilizada: {data_tit.get('estrategia_seo', 'NÃ£o informada')}")
+                    logger.info(f"Grade aprovada na tentativa {tentativa + 1}. Estratégia SEO utilizada: {data_tit.get('estrategia_seo', 'Não informada')}")
                     break
                 else:
-                    feedback_erro = f"Faltaram os seguintes tÃtulos no JSON: {faltantes}"
+                    feedback_erro = f"Faltaram os seguintes títulos no JSON: {faltantes}"
                     logger.warning(f"Falha na tentativa {tentativa + 1}: {feedback_erro}")
 
             except Exception as e:
-                feedback_erro = f"JSON invÃ¡lido: {e}"
+                feedback_erro = f"JSON inválido: {e}"
                 logger.warning(f"Tentativa {tentativa + 1}: {feedback_erro}")
 
-        # Fallback de seguranÃ§a 100% Python
+        # Fallback de segurança 100% Python
         if not titulos_grade:
             base = formatar_title_case(nome_original)
             titulos_grade = {
@@ -838,15 +838,15 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
 
     def _parse_descricao_json(self, res_copy: str) -> str:
         """
-        Faz o parse robusto do JSON de descriÃ§Ã£o retornado pela IA.
-        Trata chaves faltantes, quebras de linha literais, aspas nÃ£o escapadas e truncamento.
+        Faz o parse robusto do JSON de descrição retornado pela IA.
+        Trata chaves faltantes, quebras de linha literais, aspas não escapadas e truncamento.
         """
         import json
         import re
 
         res_clean = res_copy.strip()
 
-        # 1. Tentativa padrÃ£o com json.loads
+        # 1. Tentativa padrão com json.loads
         try:
             data = json.loads(res_clean)
             if isinstance(data, dict) and "descricao" in data:
@@ -862,18 +862,18 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
         except Exception:
             pass
 
-        # 3. ExtraÃ§Ã£o via Regex (super robusta contra aspas/quebras/truncamento)
+        # 3. Extração via Regex (super robusta contra aspas/quebras/truncamento)
         # Remove tags markdown do bloco json se houver
         if res_clean.startswith("```"):
             res_clean = re.sub(r'^```(?:json)?\n', '', res_clean)
             res_clean = re.sub(r'\n```$', '', res_clean).strip()
 
-        # Procura a chave "descricao" ou "descriÃ§ao" ou "descriÃ§Ã£o"
-        match = re.search(r'"descri[cÃ§]ao"\s*:\s*"(.*)', res_clean, re.DOTALL)
+        # Procura a chave "descricao" ou "descriçao" ou "descrição"
+        match = re.search(r'"descri[cç]ao"\s*:\s*"(.*)', res_clean, re.DOTALL)
         if match:
             content = match.group(1).strip()
             
-            # Limpa fechamentos do JSON no fim do conteÃºdo se existirem
+            # Limpa fechamentos do JSON no fim do conteúdo se existirem
             if content.endswith('}'):
                 content = content[:-1].strip()
             if content.endswith('"'):
@@ -885,7 +885,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
             content = content.replace('\\\\', '\\')
             return content.strip()
 
-        # 4. Fallback extremo: limpa o texto bruto se nÃ£o encontrar chaves
+        # 4. Fallback extremo: limpa o texto bruto se não encontrar chaves
         fallback_text = res_clean
         if fallback_text.startswith('{') and fallback_text.endswith('}'):
             fallback_text = fallback_text[1:-1].strip()
@@ -897,8 +897,8 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
 
     def _gerar_descricao(self, titulo: str, contexto: str, descricao_atual: str) -> str:
         """
-        Gera descriÃ§Ã£o via Gemini 2.5 Flash.
-        Valida presenÃ§a das 5 seÃ§Ãµes obrigatÃ³rias antes de aceitar.
+        Gera descrição via Gemini 2.5 Flash.
+        Valida presença das 5 seções obrigatórias antes de aceitar.
         """
         import json
 
@@ -907,9 +907,9 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
         feedback_erro = ""
 
         for tentativa in range(max_tentativas):
-            input_prompt = f"TÃtulo Gerado: {titulo}\n{contexto}"
+            input_prompt = f"Título Gerado: {titulo}\n{contexto}"
             if feedback_erro:
-                input_prompt += f"\n\nATENÃÃO â Erros na tentativa anterior:\n{feedback_erro}\nCorrija no prÃ³ximo JSON."
+                input_prompt += f"\n\nATENÇÃO — Erros na tentativa anterior:\n{feedback_erro}\nCorrija no próximo JSON."
 
             res_copy = self.gemini.chat(
                 system_prompt=self.PROMPT_COPY,
@@ -920,7 +920,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
 
             try:
                 if not res_copy:
-                    logger.warning(f"DescriÃ§Ã£o: resposta vazia na tentativa {tentativa + 1}.")
+                    logger.warning(f"Descrição: resposta vazia na tentativa {tentativa + 1}.")
                     feedback_erro = "A IA retornou vazio. Responda com o JSON completo."
                     continue
 
@@ -929,34 +929,34 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
 
                 if validar_descricao(desc_temp):
                     desc = desc_temp
-                    logger.info(f"DescriÃ§Ã£o aprovada ({len(desc)} chars) na tentativa {tentativa + 1}.")
+                    logger.info(f"Descrição aprovada ({len(desc)} chars) na tentativa {tentativa + 1}.")
                     break
                 else:
                     desc_norm = normalizar_texto_validador(desc_temp)
                     secoes_faltando = [s for s in SECOES_OBRIGATORIAS if SECOES_OBRIGATORIAS_NORM[s] not in desc_norm]
-                    logger.warning(f"Tentativa {tentativa + 1}: seÃ§Ãµes ausentes: {secoes_faltando}")
-                    feedback_erro = f"Faltaram as seÃ§Ãµes obrigatÃ³rias: {secoes_faltando}"
+                    logger.warning(f"Tentativa {tentativa + 1}: seções ausentes: {secoes_faltando}")
+                    feedback_erro = f"Faltaram as seções obrigatórias: {secoes_faltando}"
                     if tentativa == max_tentativas - 1:
-                        # Aceita o melhor que tiver na Ãºltima tentativa
+                        # Aceita o melhor que tiver na última tentativa
                         desc = desc_temp
-                        logger.warning("Aceitando descriÃ§Ã£o parcial na Ãºltima tentativa.")
+                        logger.warning("Aceitando descrição parcial na última tentativa.")
 
             except Exception as e:
                 res_snippet = res_copy[:200] if res_copy else "None"
-                logger.warning(f"Falha no JSON da DescriÃ§Ã£o (tentativa {tentativa + 1}): {e} | {res_snippet}")
-                feedback_erro = f"O formato retornado nÃ£o foi um JSON vÃ¡lido ({e}). A resposta parecia cortada. Gere um JSON completo."
+                logger.warning(f"Falha no JSON da Descrição (tentativa {tentativa + 1}): {e} | {res_snippet}")
+                feedback_erro = f"O formato retornado não foi um JSON válido ({e}). A resposta parecia cortada. Gere um JSON completo."
 
         return desc or descricao_atual
 
     def _gerar_ficha_tecnica(self, contexto: str, atributos_obrigatorios: Optional[List[str]]) -> Dict:
-        """Gera atributos da ficha tÃ©cnica via Groq."""
+        """Gera atributos da ficha técnica via Groq."""
         import json
 
         atribs = {}
         if not atributos_obrigatorios:
             return atribs
 
-        input_tech = f"{contexto}\nCampos ObrigatÃ³rios: {', '.join(atributos_obrigatorios)}"
+        input_tech = f"{contexto}\nCampos Obrigatórios: {', '.join(atributos_obrigatorios)}"
         res_tech = self.groq.chat(
             system_prompt=self.PROMPT_TECH,
             user_input=input_tech,
@@ -966,12 +966,12 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
             if res_tech:
                 data_tech = json.loads(res_tech.strip())
                 atribs = data_tech.get("atributos", {})
-                logger.info(f"Atributos extraÃdos: {len(atribs)} campos.")
+                logger.info(f"Atributos extraídos: {len(atribs)} campos.")
             else:
-                logger.warning("Ficha TÃ©cnica: resposta vazia.")
+                logger.warning("Ficha Técnica: resposta vazia.")
         except Exception as e:
             res_snippet = res_tech[:200] if res_tech else "None"
-            logger.warning(f"Falha no JSON da Ficha TÃ©cnica: {e} | {res_snippet}")
+            logger.warning(f"Falha no JSON da Ficha Técnica: {e} | {res_snippet}")
 
         return atribs
 
@@ -982,7 +982,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicaÃ§Ã£o:
         keywords_data = {}
         res_key = self.groq.chat(
             system_prompt=self.PROMPT_KEYWORDS,
-            user_input=f"TÃtulo: {titulo}\n{contexto}",
+            user_input=f"Título: {titulo}\n{contexto}",
             modelo="llama-3.1-8b-instant",
         )
         try:
@@ -1020,6 +1020,78 @@ class CriadorKitsService:
         self._mapa_tags_cache: Optional[Dict[str, int]] = None
         self._mapa_fabricantes_cache: Optional[Dict[int, str]] = None
 
+    def _selecionar_dimensoes_embalagem(self, dados: Dict, quantidade: int) -> Dict[str, float]:
+        """
+        Seleciona uma embalagem compatível para um kit com base nas dimensões da unidade.
+        Para kits com mais de uma unidade, retorna as dimensões da embalagem que comporta
+        a quantidade total. Para unidades simples, mantém as dimensões originais.
+        """
+        try:
+            altura = float(dados.get("height") or 0)
+            largura = float(dados.get("width") or 0)
+            comprimento = float(dados.get("length") or 0)
+        except (TypeError, ValueError):
+            return {"height": 0, "width": 0, "length": 0}
+
+        if quantidade <= 1 or altura <= 0 or largura <= 0 or comprimento <= 0:
+            return {"height": altura, "width": largura, "length": comprimento}
+
+        dimensoes_unidade = sorted([altura, largura, comprimento], reverse=True)
+
+        caixas = [
+            (27, 22, 22),
+            (21, 21, 14),
+            (25, 30, 17),
+            (21, 17, 14),
+            (27, 21, 13),
+            (27, 21, 17),
+            (18, 34, 14),
+        ]
+        sacos = [
+            (20, 30),
+            (12, 18),
+            (19, 25),
+            (20, 40),
+            (10, 30),
+            (15, 25),
+            (15, 40),
+            (40, 60),
+            (30, 40),
+        ]
+
+        def unidades_que_cabem(dims_unidade, dims_embalagem):
+            if any(p <= 0 for p in dims_unidade):
+                return 0
+            if any(p > e for p, e in zip(dims_unidade, dims_embalagem)):
+                return 0
+            qtd_por_eixo = [int(e // p) for p, e in zip(dims_unidade, dims_embalagem)]
+            return qtd_por_eixo[0] * qtd_por_eixo[1] * qtd_por_eixo[2]
+
+        candidatos = []
+        for caixa in caixas:
+            dims_caixa = sorted(caixa, reverse=True)
+            if unidades_que_cabem(dimensoes_unidade, dims_caixa) >= quantidade:
+                volume = dims_caixa[0] * dims_caixa[1] * dims_caixa[2]
+                candidatos.append((volume, caixa))
+
+        if altura <= 5:
+            dims_unidade_2d = sorted([largura, comprimento], reverse=True)
+            for saco in sacos:
+                dims_saco = sorted(saco, reverse=True)
+                if any(p > e for p, e in zip(dims_unidade_2d, dims_saco)):
+                    continue
+                qtd_por_eixo = [int(e // p) for p, e in zip(dims_unidade_2d, dims_saco)]
+                unidades_cabem = qtd_por_eixo[0] * qtd_por_eixo[1]
+                if unidades_cabem >= quantidade:
+                    volume = dims_saco[0] * dims_saco[1] * 5
+                    candidatos.append((volume, (saco[0], saco[1], 5)))
+
+        if not candidatos:
+            return {"height": altura, "width": largura, "length": comprimento}
+
+        _, melhor = min(candidatos, key=lambda item: item[0])
+        return {"height": melhor[2], "width": melhor[0], "length": melhor[1]}
+
     def _get_mapa_tags(self) -> Dict[str, int]:
         if self._mapa_tags_cache is None:
             self._mapa_tags_cache = self.client.obter_mapa_tags()
@@ -1029,7 +1101,7 @@ class CriadorKitsService:
                 logger.info(f"Mapa de tags carregado: {list(self._mapa_tags_cache.keys())}")
         return self._mapa_tags_cache
 
-    # ââ API BaseLinker ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── API BaseLinker ────────────────────────────────────────────────────────
 
     def _request_seguro(self, method: str, params: Dict) -> Dict:
         ultimo_erro = None
@@ -1046,7 +1118,7 @@ class CriadorKitsService:
 
     def _baixar_dados_produto(self, pid: str) -> Optional[Dict]:
         """
-        Baixa os dados do produto e os padroniza em um dicionÃ¡rio plano (flat),
+        Baixa os dados do produto e os padroniza em um dicionário plano (flat),
         resolvendo campos de texto, NCM, Marca e Imagem.
         """
         try:
@@ -1062,7 +1134,7 @@ class CriadorKitsService:
             sku = raw.get("sku", "")
             return self.client.buscar_produto_por_sku(sku)
         except Exception as exc:
-            logger.error(f"Falha download/padronizaÃ§Ã£o PID={pid}: {exc}")
+            logger.error(f"Falha download/padronização PID={pid}: {exc}")
             return None
 
     def buscar_pid_por_sku(self, sku: str) -> Optional[str]:
@@ -1079,7 +1151,7 @@ class CriadorKitsService:
             logger.error(f"buscar PID SKU={sku}: {exc}")
             return None
 
-    # ââ PreÃ§o âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Preço ─────────────────────────────────────────────────────────────────
 
     def _calcular_preco(self, dados: Dict, sku_novo: str) -> float:
         try:
@@ -1093,7 +1165,7 @@ class CriadorKitsService:
     def _montar_prices_dict(self, preco: float) -> Dict[str, float]:
         return {"53516": preco}
 
-    # ââ Textos ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Textos ────────────────────────────────────────────────────────────────
 
     def _extrair_features(self, dados: Dict) -> Dict:
         tf = dados.get("text_fields", {}) or {}
@@ -1166,7 +1238,7 @@ class CriadorKitsService:
             if n_limpo not in features:
                 if "(Valores permitidos:" in n_prompt:
                     dica = n_prompt.split("(Valores permitidos:")[1].strip(" )")
-                    features[n_limpo] = f"PREENCHER (OpÃ§Ãµes: {dica})"
+                    features[n_limpo] = f"PREENCHER (Opções: {dica})"
                 else:
                     features[n_limpo] = "PREENCHER"
 
@@ -1180,31 +1252,31 @@ class CriadorKitsService:
                 campos[chave] = valor
         campos["extra_field_39310"] = "un"
         
-        # ForÃ§a os campos obrigatÃ³rios na Ficha TÃ©cnica (Features)
+        # Força os campos obrigatórios na Ficha Técnica (Features)
         if "features" in campos:
             features_ref = campos["features"]
             has_cond = False
             has_fmt = False
             for k in list(features_ref.keys()):
                 k_lower = k.lower()
-                if k_lower in ("condiÃ§Ã£o do item", "item_condition"):
+                if k_lower in ("condição do item", "item_condition"):
                     features_ref[k] = "Novo"
                     has_cond = True
                 if k_lower == "formato de venda":
-                    # No caso isolado, sem quantidade, usamos Unidade como padrÃ£o se nao encontrar
+                    # No caso isolado, sem quantidade, usamos Unidade como padrão se nao encontrar
                     features_ref[k] = "Unidade"
                     has_fmt = True
             
             if not has_cond:
-                features_ref["CondiÃ§Ã£o do item"] = "Novo"
+                features_ref["Condição do item"] = "Novo"
             if not has_fmt:
                 features_ref["Formato de venda"] = "Unidade"
 
-            # Limpa Modelo se for puramente numÃ©rico (SKU) ou usar placeholders proibidos
+            # Limpa Modelo se for puramente numérico (SKU) ou usar placeholders proibidos
             for k in list(features_ref.keys()):
                 if "modelo" in k.lower() or "model" in k.lower():
                     v = str(features_ref[k]).strip()
-                    if not v or v.isdigit() or any(forbidden in v.lower() for forbidden in ["nÃ£o informado", "a informar", "desconhecido", "n/a", "null", "preencher", "nÃ£o se aplica", "nao se aplica"]):
+                    if not v or v.isdigit() or any(forbidden in v.lower() for forbidden in ["não informado", "a informar", "desconhecido", "n/a", "null", "preencher", "não se aplica", "nao se aplica"]):
                         del features_ref[k]
 
         return campos
@@ -1215,10 +1287,10 @@ class CriadorKitsService:
         lista_obrigatorios_nomes = []
         termos_ignorar = [
             "motivo de gtin vazio", "reason_for_no_gtin", "motivo de gtin isento",
-            "cÃ³digo universal", "ean", "gtin", "cÃ³digo de barras",
-            "autorizaÃ§Ã£o sanitÃ¡ria", "aviso de operaÃ§Ã£o", "certificado da afe",
-            "licenÃ§a do conama", "r.s/nso", "registro de producto do ms",
-            "cofepris", "rpptm", "registro/nso", "comunicaÃ§Ã£o prÃ©via na anvisa"
+            "código universal", "ean", "gtin", "código de barras",
+            "autorização sanitária", "aviso de operação", "certificado da afe",
+            "licença do conama", "r.s/nso", "registro de producto do ms",
+            "cofepris", "rpptm", "registro/nso", "comunicação prévia na anvisa"
         ]
         
         if category_id_ml and category_id_ml != "979589":
@@ -1232,7 +1304,7 @@ class CriadorKitsService:
                     n = f.get("name")
                     if not n: continue
                     
-                    # Filtra termos de identificaÃ§Ã£o que o sistema jÃ¡ resolve ou que o usuÃ¡rio pediu para tirar
+                    # Filtra termos de identificação que o sistema já resolve ou que o usuário pediu para tirar
                     if any(t in n.lower() for t in termos_ignorar):
                         continue
 
@@ -1242,18 +1314,18 @@ class CriadorKitsService:
                         if valor_fisico:
                             features[n] = valor_fisico
                         else:
-                            campo_prompt = f"{n} [OBRIGATÃ“RIO]"
+                            campo_prompt = f"{n} [OBRIGATÓRIO]"
                             if allowed_values:
                                 vals_str = ", ".join(allowed_values[:10])
-                                campo_prompt = f"{n} [OBRIGATÃ“RIO] (Valores permitidos: {vals_str})"
+                                campo_prompt = f"{n} [OBRIGATÓRIO] (Valores permitidos: {vals_str})"
                             lista_obrigatorios_nomes.append(campo_prompt)
 
                 logger.info(f"[Ficha Tecnica] Pendentes para IA: {len(lista_obrigatorios_nomes)}")
             except Exception as exc:
-                logger.error(f"[Ficha TÃ©cnica] Erro ao buscar dados do ML: {exc}")
+                logger.error(f"[Ficha Técnica] Erro ao buscar dados do ML: {exc}")
         return lista_obrigatorios_nomes
 
-    # â”€â”€ Payload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Payload ─────────────────────────────────────────────────────────────────
 
     def _montar_payload(
         self,
@@ -1289,7 +1361,7 @@ class CriadorKitsService:
         if tag_val:
             tags_enviar.append(tag_val)
         else:
-            logger.warning(f"Tag '{modalidade_tag}' nÃ£o encontrada no BaseLinker.")
+            logger.warning(f"Tag '{modalidade_tag}' não encontrada no BaseLinker.")
 
         return {
             "inventory_id":    self.ID_INVENTARIO,
@@ -1331,16 +1403,16 @@ class CriadorKitsService:
 
     def _obter_fallback_gpc_por_ncm(self, ncm: str) -> Optional[str]:
         """
-        Retorna um GPC seguro e ativo baseado nos primeiros dÃgitos do NCM do produto.
-        Caso nÃ£o mapeie, retorna None.
+        Retorna um GPC seguro e ativo baseado nos primeiros dígitos do NCM do produto.
+        Caso não mapeie, retorna None.
         """
         ncm_limpo = str(ncm).replace(".", "").strip()
         
-        # Torneiras, registros, vÃ¡lvulas (NCM 8481...)
+        # Torneiras, registros, válvulas (NCM 8481...)
         if ncm_limpo.startswith("8481"):
             return "10002602"  # Torneiras / Misturadores
             
-        # Cabos elÃ©tricos, fios, conectores (NCM 8544...)
+        # Cabos elétricos, fios, conectores (NCM 8544...)
         if ncm_limpo.startswith("8544"):
             return "10000586"  # Cabos / Conectores de Energia
             
@@ -1361,8 +1433,8 @@ class CriadorKitsService:
         gpc_manual: Optional[str] = None,
     ) -> str:
         """
-        ObtÃ©m ou gera um EAN para o kit.
-        UnitÃ¡rio (qtd=1) -> sem novo EAN, exceto se forcar_unitario for True.
+        Obtém ou gera um EAN para o kit.
+        Unitário (qtd=1) -> sem novo EAN, exceto se forcar_unitario for True.
         Kit (qtd>1) -> Novo EAN registrado na GS1 Brasil.
         """
         if quantidade <= 1 and not forcar_unitario:
@@ -1375,7 +1447,7 @@ class CriadorKitsService:
         ).exclude(gtin='PENDENTE').exclude(gtin='').first()
 
         if gtin_existente:
-            logger.info(f"Reaproveitando EAN {gtin_existente.gtin} da variaÃ§Ã£o {gtin_existente.sku_kit} para a quantidade {quantidade}")
+            logger.info(f"Reaproveitando EAN {gtin_existente.gtin} da variação {gtin_existente.sku_kit} para a quantidade {quantidade}")
             obj, created = GtinKit.objects.get_or_create(
                 sku_kit=sku_kit_final,
                 defaults={
@@ -1407,25 +1479,25 @@ class CriadorKitsService:
             ncm_bruto = str(dados_completos.get("ncm", "00000000"))
             ncm_limpo = ncm_bruto.replace(".", "").strip()
 
-            # 1. Se foi enviado GPC manual e for vÃ¡lido (8 dÃgitos numÃ©ricos)
+            # 1. Se foi enviado GPC manual e for válido (8 dígitos numéricos)
             if gpc_manual:
                 gpc_manual_limpo = str(gpc_manual).strip()
                 if gpc_manual_limpo.isdigit() and len(gpc_manual_limpo) == 8:
                     gpc = gpc_manual_limpo
                     logger.info(f"GPC manual fornecido pelo painel: {gpc}")
                 else:
-                    logger.warning(f"GPC manual fornecido '{gpc_manual}' Ã© invÃ¡lido (deve ter 8 dÃgitos numÃ©ricos).")
+                    logger.warning(f"GPC manual fornecido '{gpc_manual}' é inválido (deve ter 8 dígitos numéricos).")
 
-            # 2. Se nÃ£o foi fornecido GPC manual ou se ele Ã© invÃ¡lido, tenta obter do fallback estÃ¡tico de NCM
+            # 2. Se não foi fornecido GPC manual ou se ele é inválido, tenta obter do fallback estático de NCM
             if not gpc and ncm_limpo:
-                logger.info("Buscando GPC no fallback estÃ¡tico por NCM...")
+                logger.info("Buscando GPC no fallback estático por NCM...")
                 gpc_fallback = self._obter_fallback_gpc_por_ncm(ncm_limpo)
                 if gpc_fallback:
                     gpc = gpc_fallback
-                    logger.info(f"GPC determinado via fallback estÃ¡tico de NCM: {gpc}")
+                    logger.info(f"GPC determinado via fallback estático de NCM: {gpc}")
 
             if not gpc:
-                raise Exception("GPC nÃ£o pÃ´de ser determinado (nenhum GPC manual vÃ¡lido fornecido e nenhum fallback aplicÃ¡vel encontrado).")
+                raise Exception("GPC não pôde ser determinado (nenhum GPC manual válido fornecido e nenhum fallback aplicável encontrado).")
 
             marca_real = dados_completos.get("marca")
             m_id = dados_completos.get("manufacturer_id")
@@ -1433,7 +1505,7 @@ class CriadorKitsService:
                 mapa_marcas = self._get_mapa_fabricantes()
                 marca_real = mapa_marcas.get(int(m_id)) or marca_real
 
-            if not marca_real or "nÃ£o informada" in marca_real.lower():
+            if not marca_real or "não informada" in marca_real.lower():
                 marca_real = "Sanol"
 
             dados_gs1 = dados_completos.copy()
@@ -1458,23 +1530,23 @@ class CriadorKitsService:
 
         except Exception as e:
             import traceback
-            logger.error(f"Falha crÃtica no processo GS1: {e}")
+            logger.error(f"Falha crítica no processo GS1: {e}")
             
-            # Se for unitÃ¡rio (Qtd = 1), tenta usar o EAN original do produto base se for vÃ¡lido
+            # Se for unitário (Qtd = 1), tenta usar o EAN original do produto base se for válido
             if quantidade == 1:
                 ean_original = str(dados_completos.get("ean") or "").strip()
-                # Verifica se Ã© um EAN brasileiro legÃtimo ou qualquer EAN vÃ¡lido (mÃnimo de 12 dÃgitos)
+                # Verifica se é um EAN brasileiro legítimo ou qualquer EAN válido (mínimo de 12 dígitos)
                 if ean_original and len(ean_original) >= 12 and ean_original.lower() != "pendente":
-                    logger.warning(f"GS1 falhou para unitÃ¡rio. Utilizando EAN original como fallback: {ean_original}")
+                    logger.warning(f"GS1 falhou para unitário. Utilizando EAN original como fallback: {ean_original}")
                     obj.gtin = ean_original
                     obj.save()
                     return ean_original
 
-            # Se nÃ£o puder usar o original ou se for kit (Qtd > 1):
-            # Para evitar rejeiÃ§Ãµes duras nos marketplaces por EAN/GTIN invÃ¡lido (ex: iniciado com '1'),
+            # Se não puder usar o original ou se for kit (Qtd > 1):
+            # Para evitar rejeições duras nos marketplaces por EAN/GTIN inválido (ex: iniciado com '1'),
             # salvamos como 'PENDENTE' no banco local e retornamos vazio ("") para que o produto seja publicado sem EAN,
-            # permitindo que o anÃºncio vÃ¡ ao ar e o usuÃ¡rio possa corrigir o EAN posteriormente.
-            logger.warning(f"GS1 falhou para kit/unitÃ¡rio (Qtd={quantidade}). Retornando vazio para evitar GTIN invÃ¡lido.")
+            # permitindo que o anúncio vá ao ar e o usuário possa corrigir o EAN posteriormente.
+            logger.warning(f"GS1 falhou para kit/unitário (Qtd={quantidade}). Retornando vazio para evitar GTIN inválido.")
             obj.gtin = "PENDENTE"
             obj.save()
             return ""
@@ -1506,7 +1578,7 @@ class CriadorKitsService:
                 return mapa.get(int(m_id))
             return None
 
-        if "ean" in n or "cÃ³digo universal" in n:
+        if "ean" in n or "código universal" in n:
             val = dados.get("ean")
             return str(val).strip() if val else None
 
@@ -1533,7 +1605,7 @@ class CriadorKitsService:
 
         return None
 
-    # â”€â”€ ExecuÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Execução ──────────────────────────────────────────────────────────────
 
     def _validar_conteudo_ia(self, conteudo: Dict, nome_original: str) -> Optional[str]:
         """
@@ -1604,19 +1676,19 @@ class CriadorKitsService:
         skus_secundarios: Optional[List[str]] = None,
     ) -> Dict:
         """
-        Cria a grade completa de 8 anÃºncios (1/2/3/4un x ClÃ¡ssico/Premium) no BaseLinker.
-        Suporta atÃ© 4 SKUs secundÃ¡rios para Kit Misto.
+        Cria a grade completa de 8 anúncios (1/2/3/4un x Clássico/Premium) no BaseLinker.
+        Suporta até 4 SKUs secundários para Kit Misto.
         """
-        logger.warning(f"Iniciando criaÃ§Ã£o de GRADE (8 anÃºncios) -> SKU Origem={sku_origem} | EAN UnitÃ¡rio={gerar_ean_unitario}")
+        logger.warning(f"Iniciando criação de GRADE (8 anúncios) -> SKU Origem={sku_origem} | EAN Unitário={gerar_ean_unitario}")
         
-        # ResoluÃ§Ã£o de categoria (Exige categoria informada manualmente, sem adivinhaÃ§Ã£o automÃ¡tica por tÃtulo)
+        # Resolução de categoria (Exige categoria informada manualmente, sem adivinhação automática por título)
         if not category_id_ml or category_id_ml == "979589":
-            return {"sucesso": False, "msg": "Categoria do Mercado Livre nÃ£o informada. Por favor, forneÃ§a a Ã¡rvore de categoria no formulÃ¡rio do painel."}
+            return {"sucesso": False, "msg": "Categoria do Mercado Livre não informada. Por favor, forneça a árvore de categoria no formulário do painel."}
             
-        # Inicializa o cache local de execuÃ§Ã£o para compartilhar EANs entre ClÃ¡ssico e Premium
+        # Inicializa o cache local de execução para compartilhar EANs entre Clássico e Premium
         self.gtins_gerados_lote: Dict[int, str] = {}
 
-        # Registra o inÃcio de execuÃ§Ã£o do lote no cache para controle de cancelamento em tempo real
+        # Registra o início de execução do lote no cache para controle de cancelamento em tempo real
         from django.core.cache import cache
         cache.set(f"criacao_lote_{sku_origem}", "executando", timeout=120)
 
@@ -1624,15 +1696,15 @@ class CriadorKitsService:
         if not dados:
             return {"sucesso": False, "msg": "Falha ao baixar dados do produto principal."}
 
-        # Trava de SeguranÃ§a: ValidaÃ§Ã£o de dados essenciais
+        # Trava de Segurança: Validação de dados essenciais
         erro_validacao = self._validar_dados_essenciais(dados)
         if erro_validacao:
             return {"sucesso": False, "msg": erro_validacao}
 
         if sku_origem == "30480":
-            logger.warning(f"AUDITORIA PREÃ‡O SKU 30480: PreÃ§o Base={dados.get('price_brutto')} | Prices={dados.get('prices')}")
+            logger.warning(f"AUDITORIA PREÇO SKU 30480: Preço Base={dados.get('price_brutto')} | Prices={dados.get('prices')}")
 
-        # Consolida a lista de SKUs secundÃ¡rios
+        # Consolida a lista de SKUs secundários
         lista_skus_sec = []
         if skus_secundarios:
             for s in skus_secundarios:
@@ -1646,21 +1718,21 @@ class CriadorKitsService:
         for s_sec in lista_skus_sec:
             pid_sec = self.buscar_pid_por_sku(s_sec)
             if not pid_sec:
-                return {"sucesso": False, "msg": f"SKU secundÃ¡rio {s_sec} nÃ£o encontrado no BaseLinker."}
+                return {"sucesso": False, "msg": f"SKU secundário {s_sec} não encontrado no BaseLinker."}
             d_sec = self._baixar_dados_produto(pid_sec)
             if not d_sec:
-                return {"sucesso": False, "msg": f"Falha ao baixar dados do SKU secundÃ¡rio {s_sec}."}
+                return {"sucesso": False, "msg": f"Falha ao baixar dados do SKU secundário {s_sec}."}
             erro_sec = self._validar_dados_essenciais(d_sec)
             if erro_sec:
-                return {"sucesso": False, "msg": f"SecundÃ¡rio ({s_sec}): {erro_sec}"}
+                return {"sucesso": False, "msg": f"Secundário ({s_sec}): {erro_sec}"}
             pids_secundarios.append(pid_sec)
             dados_secundarios.append(d_sec)
 
-        # Para retrocompatibilidade com referÃªncias a dados_secundario/pid_secundario
+        # Para retrocompatibilidade com referências a dados_secundario/pid_secundario
         dados_secundario = dados_secundarios[0] if dados_secundarios else None
         pid_secundario   = pids_secundarios[0] if pids_secundarios else None
 
-        # ResoluÃ§Ã£o de categoria
+        # Resolução de categoria
         if not category_id_ml or category_id_ml == "979589":
             nome_base = (dados.get("text_fields", {}) or {}).get("name") or dados.get("name") or ""
             pred = MercadoLivreClient().predict_categoria(nome_base, limite=1)
@@ -1670,7 +1742,7 @@ class CriadorKitsService:
 
         category_id_bl = self.sincronizar_categoria_ml_para_baselinker(category_id_ml)
 
-        # CÃ¡lculo da grade de preÃ§os
+        # Cálculo da grade de preços
         try:
             from precificacao.services.calculadora import Calculadora
 
@@ -1687,12 +1759,12 @@ class CriadorKitsService:
             else:
                 grade = Calculadora.calcular_grade(dados, sku_ref=sku_origem, category_id=category_id_ml, vendas_60_dias=vendas)
         except Exception as exc:
-            return {"sucesso": False, "msg": f"Erro no motor de precificaÃ§Ã£o: {exc}"}
+            return {"sucesso": False, "msg": f"Erro no motor de precificação: {exc}"}
 
         if grade.bloqueado:
             return {"sucesso": False, "msg": f"Grade bloqueada: {grade.motivo_bloqueio}"}
 
-        # Coleta atributos e gera conteÃºdo base (uma Ãºnica chamada Ã  IA)
+        # Coleta atributos e gera conteúdo base (uma única chamada à IA)
         features_base     = self._extrair_features(dados)
         lista_obrigatorios = self._buscar_atributos_obrigatorios_ml(category_id_ml, features_base, dados)
 
@@ -1710,7 +1782,7 @@ class CriadorKitsService:
         atribs_ia     = conteudo_base.get("atributos", {})
         features_base.update(atribs_ia)
 
-        # Trava de SeguranÃ§a: Valida se a IA gerou tÃtulo e descriÃ§Ã£o vÃ¡lidos
+        # Trava de Segurança: Valida se a IA gerou título e descrição válidos
         nome_original_prod = (dados.get("text_fields", {}) or {}).get("name") or dados.get("name") or ""
         titulo_referencia = conteudo_base.get("titulo") or titulos_grade.get("1_classico") or ""
         conteudo_para_validar = {"titulo": titulo_referencia, "descricao": desc_base}
@@ -1728,7 +1800,7 @@ class CriadorKitsService:
             if str(k).startswith("extra_field_") and k not in campos_base:
                 campos_base[k] = v
 
-        # Identifica se o produto base tem um EAN legÃtimo cadastrado no BaseLinker
+        # Identifica se o produto base tem um EAN legítimo cadastrado no BaseLinker
         ean_original = str(dados.get("ean") or "").strip()
         ean_base_valido = bool(ean_original and ean_original.lower() != "pendente")
         precisa_gerar_unitario = gerar_ean_unitario or not ean_base_valido
@@ -1741,33 +1813,33 @@ class CriadorKitsService:
                 logger.warning(f"Ignorando {anuncio.referencia}: Bloqueado.")
                 continue
 
-            # Verifica se o lote foi voluntariamente cancelado pelo usuÃ¡rio
+            # Verifica se o lote foi voluntariamente cancelado pelo usuário
             from django.core.cache import cache
             status_lote = cache.get(f"criacao_lote_{sku_origem}")
             if status_lote == "cancelado":
-                logger.warning(f"Lote do SKU {sku_origem} foi voluntariamente CANCELADO pelo usuÃ¡rio durante o processamento.")
-                # Executa o rollback completo de tudo que jÃ¡ foi criado atÃ© agora neste lote, inclusive na GS1
+                logger.warning(f"Lote do SKU {sku_origem} foi voluntariamente CANCELADO pelo usuário durante o processamento.")
+                # Executa o rollback completo de tudo que já foi criado até agora neste lote, inclusive na GS1
                 self.executar_rollback_grade(sku_origem)
                 return {
                     "sucesso": False,
-                    "msg": f"CriaÃ§Ã£o interrompida com sucesso. Todos os anÃºncios criados atÃ© o momento para o SKU {sku_origem} foram removidos e os GTINs correspondentes foram inativados/excluÃdos na GS1."
+                    "msg": f"Criação interrompida com sucesso. Todos os anúncios criados até o momento para o SKU {sku_origem} foram removidos e os GTINs correspondentes foram inativados/excluídos na GS1."
                 }
 
             sku_novo = self._obter_proximo_sku(None)
             if not sku_novo:
                 break
 
-            # Seleciona tÃtulo da grade para a variaÃ§Ã£o
+            # Seleciona título da grade para a variação
             chave_grade  = f"{anuncio.quantidade}_{anuncio.modalidade}"
             titulo_base  = titulos_grade.get(chave_grade) or titulos_grade.get(str(anuncio.quantidade))
 
             if not titulo_base:
                 titulo_base = conteudo_base.get('titulo', '')
 
-            # Limpeza agressiva: Remove Kit, Unidade, UnitÃ¡rio etc. do tÃtulo base da IA
+            # Limpeza agressiva: Remove Kit, Unidade, Unitário etc. do título base da IA
             termos_limpar = [
-                "Kit", "Unidade", "Unidades", "UnitÃ¡rio", "Unitario", 
-                "Premium", "ClÃ¡ssico", "Classico", "Original", "Pack"
+                "Kit", "Unidade", "Unidades", "Unitário", "Unitario", 
+                "Premium", "Clássico", "Classico", "Original", "Pack"
             ]
             for termo in termos_limpar:
                 # Regex para remover a palavra inteira isolada
@@ -1775,7 +1847,7 @@ class CriadorKitsService:
             
             titulo_final = " ".join(titulo_base.split()).strip()
 
-            # Garante prefixo "Kit N" para kits ou limpa para unitÃ¡rio
+            # Garante prefixo "Kit N" para kits ou limpa para unitário
             if anuncio.quantidade > 1:
                 titulo_final = f"Kit {anuncio.quantidade} {titulo_final}".strip()
             
@@ -1793,32 +1865,32 @@ class CriadorKitsService:
             if tag_val:
                 tags_enviar.append(tag_val)
             else:
-                logger.warning(f"Tag '{tag_name}' nÃ£o encontrada no BaseLinker.")
+                logger.warning(f"Tag '{tag_name}' não encontrada no BaseLinker.")
 
-            # Se for um anÃºncio unitÃ¡rio clÃ¡ssico (Qtd = 1 e modalidade = classico), adiciona tambÃ©m a tag "Marketplace"
+            # Se for um anúncio unitário clássico (Qtd = 1 e modalidade = classico), adiciona também a tag "Marketplace"
             if anuncio.quantidade == 1 and anuncio.modalidade == "classico":
                 tag_marketplace = mapa_tags.get("marketplace")
                 if tag_marketplace:
                     tags_enviar.append(tag_marketplace)
                 else:
-                    logger.warning("Tag 'Marketplace' nÃ£o encontrada no BaseLinker.")
+                    logger.warning("Tag 'Marketplace' não encontrada no BaseLinker.")
 
             ean_final = ""
             if anuncio.quantidade == 1 and not precisa_gerar_unitario:
                 ean_final = dados.get("ean", "")
 
-            # Atualiza features por variaÃ§Ã£o
+            # Atualiza features por variação
             features_var = features_base.copy()
             has_cond = False
             has_fmt = False
             
             for k in list(features_var.keys()):
                 k_lower = k.lower()
-                if ean_final and ("cÃ³digo universal" in k_lower or "ean" in k_lower):
+                if ean_final and ("código universal" in k_lower or "ean" in k_lower):
                     features_var[k] = ean_final
                 if "unidades por kit" in k_lower or "unidades por embalagem" in k_lower:
                     features_var[k] = str(anuncio.quantidade)
-                if k_lower in ("condiÃ§Ã£o do item", "item_condition"):
+                if k_lower in ("condição do item", "item_condition"):
                     features_var[k] = "Novo"
                     has_cond = True
                 if k_lower == "formato de venda":
@@ -1826,26 +1898,28 @@ class CriadorKitsService:
                     has_fmt = True
 
             if not has_cond:
-                features_var["CondiÃ§Ã£o do item"] = "Novo"
+                features_var["Condição do item"] = "Novo"
             if not has_fmt:
                 features_var["Formato de venda"] = "Unidade" if anuncio.quantidade == 1 else "Kit"
 
-            # Garante que o Modelo nunca seja invÃ¡lido, vazio ou use placeholders proibidos
+            # Garante que o Modelo nunca seja inválido, vazio ou use placeholders proibidos
             has_modelo = False
             base_sku = str(dados.get("sku") or sku_origem).strip()
             for k in list(features_var.keys()):
                 if "modelo" in k.lower() or "model" in k.lower():
                     has_modelo = True
                     v = str(features_var[k]).strip()
-                    if not v or any(forbidden in v.lower() for forbidden in ["nÃ£o informado", "a informar", "desconhecido", "n/a", "null", "preencher", "nÃ£o se aplica", "nao se aplica"]):
+                    if not v or any(forbidden in v.lower() for forbidden in ["não informado", "a informar", "desconhecido", "n/a", "null", "preencher", "não se aplica", "nao se aplica"]):
                         features_var[k] = base_sku
 
             if not has_modelo:
                 for n_p in lista_obrigatorios:
                     n_limpo = re.sub(r'\s*\(Valores permitidos:.*?\)', '', n_p).strip()
-                    n_limpo = n_limpo.replace(" [OBRIGATÃRIO]", "").strip()
+                    n_limpo = n_limpo.replace(" [OBRIGATÓRIO]", "").strip()
                     if "modelo" in n_limpo.lower() or "model" in n_limpo.lower():
                         features_var[n_limpo] = base_sku
+
+            dimensoes_embalagem = self._selecionar_dimensoes_embalagem(dados, anuncio.quantidade)
 
             payload = {
                 "inventory_id":    self.ID_INVENTARIO,
@@ -1862,9 +1936,9 @@ class CriadorKitsService:
                 "price_brutto":    anuncio.preco_vitrine,
                 "prices":          {"53516": anuncio.preco_vitrine},
                 "weight":          (float(dados.get("weight") or 0) + sum(float(d.get("weight") or 0) for d in dados_secundarios)) * anuncio.quantidade,
-                "height":          dados.get("height", 0),
-                "width":           dados.get("width", 0),
-                "length":          dados.get("length", 0),
+                "height":          dimensoes_embalagem.get("height", 0),
+                "width":           dimensoes_embalagem.get("width", 0),
+                "length":          dimensoes_embalagem.get("length", 0),
                 "tags":            tags_enviar,
                 "images":          self._extrair_imagens(dados),
                 "is_bundle":       1,
@@ -1882,11 +1956,11 @@ class CriadorKitsService:
 
                 if anuncio.quantidade > 1 or (anuncio.quantidade == 1 and precisa_gerar_unitario):
                     time.sleep(2)
-                    # Verifica se o EAN para esta quantidade jÃ¡ foi gerado na execuÃ§Ã£o deste lote/grade
+                    # Verifica se o EAN para esta quantidade já foi gerado na execução deste lote/grade
                     if anuncio.quantidade in self.gtins_gerados_lote:
                         ean_final = self.gtins_gerados_lote[anuncio.quantidade]
                         logger.info(f"Herdando EAN {ean_final} do cache de lote para SKU Kit {sku_novo} (Qtd {anuncio.quantidade})")
-                        # Cria o registro individual da variaÃ§Ã£o no banco local apontando para o EAN herdado
+                        # Cria o registro individual da variação no banco local apontando para o EAN herdado
                         GtinKit.objects.get_or_create(
                             sku_kit=sku_novo,
                             defaults={
@@ -1906,7 +1980,7 @@ class CriadorKitsService:
 
                 if ean_final and (anuncio.quantidade > 1 or precisa_gerar_unitario):
                     for k in list(features_var.keys()):
-                        if "cÃ³digo universal" in k.lower() or "ean" in k.lower():
+                        if "código universal" in k.lower() or "ean" in k.lower():
                             features_var[k] = ean_final
 
                     update_payload = {
@@ -1919,10 +1993,10 @@ class CriadorKitsService:
                         },
                     }
                     self.client._request("addInventoryProduct", update_payload)
-                    logger.info(f"Produto {sku_novo} atualizado com EAN {ean_final} e Ficha TÃ©cnica.")
+                    logger.info(f"Produto {sku_novo} atualizado com EAN {ean_final} e Ficha Técnica.")
 
             except Exception as exc:
-                logger.error(f"Erro ao criar variaÃ§Ã£o {anuncio.referencia} (SKU {sku_novo}): {exc}")
+                logger.error(f"Erro ao criar variação {anuncio.referencia} (SKU {sku_novo}): {exc}")
                 if "Falha ao obter ID" in str(exc) or "API Baselinker falhou" in str(exc):
                     self._reciclar_numero(sku_novo)
 
@@ -1930,7 +2004,7 @@ class CriadorKitsService:
             "sucesso": True,
             "skus":    skus_criados,
             "ids":     ids_criados,
-            "msg":     f"Grade criada com {len(skus_criados)} anÃºncios no BaseLinker.",
+            "msg":     f"Grade criada com {len(skus_criados)} anúncios no BaseLinker.",
         }
 
     def executar_criacao(
@@ -1952,10 +2026,10 @@ class CriadorKitsService:
             return {
                 "sucesso": False,
                 "msg": f"Falha ao baixar dados do PID={pid}.",
-                "erro_detalhe": "Produto nÃ£o encontrado no BaseLinker.",
+                "erro_detalhe": "Produto não encontrado no BaseLinker.",
             }
 
-        # Trava de SeguranÃ§a: ValidaÃ§Ã£o de dados essenciais
+        # Trava de Segurança: Validação de dados essenciais
         erro_validacao = self._validar_dados_essenciais(dados)
         if erro_validacao:
             return {"sucesso": False, "msg": erro_validacao}
@@ -1970,25 +2044,25 @@ class CriadorKitsService:
             if not pid_secundario:
                 return {
                     "sucesso": False,
-                    "msg": f"SKU secundÃ¡rio {sku_secundario} nÃ£o encontrado.",
-                    "erro_detalhe": f"SKU {sku_secundario} nÃ£o encontrado no BaseLinker.",
+                    "msg": f"SKU secundário {sku_secundario} não encontrado.",
+                    "erro_detalhe": f"SKU {sku_secundario} não encontrado no BaseLinker.",
                 }
             dados_secundario = self._baixar_dados_produto(pid_secundario)
             if not dados_secundario:
                 return {
                     "sucesso": False,
-                    "msg": f"Falha ao baixar dados do SKU secundÃ¡rio {sku_secundario}.",
-                    "erro_detalhe": "Produto secundÃ¡rio nÃ£o encontrado.",
+                    "msg": f"Falha ao baixar dados do SKU secundário {sku_secundario}.",
+                    "erro_detalhe": "Produto secundário não encontrado.",
                 }
             
-            # ValidaÃ§Ã£o para produto secundÃ¡rio
+            # Validação para produto secundário
             erro_validacao_sec = self._validar_dados_essenciais(dados_secundario)
             if erro_validacao_sec:
-                return {"sucesso": False, "msg": f"SecundÃ¡rio: {erro_validacao_sec}"}
+                return {"sucesso": False, "msg": f"Secundário: {erro_validacao_sec}"}
 
         category_id_bl = self.sincronizar_categoria_ml_para_baselinker(category_id_ml)
 
-        # Gera conteÃºdo via IA antes de alocar SKU
+        # Gera conteúdo via IA antes de alocar SKU
         try:
             tf = dados.get("text_fields", {}) or {}
             nome_original_prod = tf.get("name") or dados.get("name") or ""
@@ -2005,9 +2079,9 @@ class CriadorKitsService:
                 gera_grade=False,
             )
         except Exception as exc:
-            return {"sucesso": False, "msg": f"Erro crÃtico na geraÃ§Ã£o de conteÃºdo pela IA: {exc}"}
+            return {"sucesso": False, "msg": f"Erro crítico na geração de conteúdo pela IA: {exc}"}
 
-        # Trava de SeguranÃ§a: Valida se a IA gerou tÃtulo e descriÃ§Ã£o vÃ¡lidos
+        # Trava de Segurança: Valida se a IA gerou título e descrição válidos
         erro_conteudo = self._validar_conteudo_ia(conteudo_ia, nome_original_prod)
         if erro_conteudo:
             return {"sucesso": False, "msg": erro_conteudo}
@@ -2017,7 +2091,7 @@ class CriadorKitsService:
             if not sku_final:
                 return {
                     "sucesso": False,
-                    "msg": "SKU indisponÃvel.",
+                    "msg": "SKU indisponível.",
                     "erro_detalhe": "DB retornou NULL em get_next_kit_sku().",
                 }
 
@@ -2049,9 +2123,9 @@ class CriadorKitsService:
                     "msg":      f"{tipo} {sku_final} criado com sucesso! (ID: {id_kit})",
                 }
 
-        return {"sucesso": False, "msg": "Falha apÃ³s 5 tentativas.", "erro_detalhe": "Verifique o BaseLinker."}
+        return {"sucesso": False, "msg": "Falha após 5 tentativas.", "erro_detalhe": "Verifique o BaseLinker."}
 
-    # ââ UtilitÃ¡rios âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Utilitários ───────────────────────────────────────────────────────────
 
     def sincronizar_categoria_ml_para_baselinker(self, category_id_ml: Optional[str]) -> int:
         if not category_id_ml or category_id_ml == "979589":
@@ -2169,7 +2243,7 @@ class CriadorKitsService:
         if not historicos.exists():
             return {
                 "sucesso": False,
-                "msg": f"Nenhum kit no histÃ³rico encontrado para o SKU de origem {sku_origem}."
+                "msg": f"Nenhum kit no histórico encontrado para o SKU de origem {sku_origem}."
             }
 
         deletados_bl = 0
@@ -2200,18 +2274,18 @@ class CriadorKitsService:
         gtins = GtinKit.objects.filter(sku_origem=sku_origem).exclude(gtin='PENDENTE').exclude(gtin='').values_list('gtin', flat=True).distinct()
         for g in gtins:
             try:
-                logger.warning(f"Chamando inativaÃ§Ã£o GS1 para o GTIN {g} devido ao Rollback.")
+                logger.warning(f"Chamando inativação GS1 para o GTIN {g} devido ao Rollback.")
                 gs1.inativar_ou_excluir_produto(g)
             except Exception as e:
                 logger.error(f"Erro ao inativar GTIN {g} na GS1 durante rollback: {e}")
 
-        # Deleta registros de histÃ³rico
+        # Deleta registros de histórico
         historicos.delete()
 
         # Deleta registros de GTIN local (GtinKit)
         gtins_deletados, _ = GtinKit.objects.filter(sku_origem=sku_origem).delete()
 
-        msg = f"Rollback concluÃdo. Deletados {deletados_bl} anÃºncios no BaseLinker e {gtins_deletados} GTINs locais limpos. SKUs reciclados: {', '.join(skus_reciclados)}."
+        msg = f"Rollback concluído. Deletados {deletados_bl} anúncios no BaseLinker e {gtins_deletados} GTINs locais limpos. SKUs reciclados: {', '.join(skus_reciclados)}."
         logger.warning(msg)
         if erros:
             logger.error(f"Erros encontrados no rollback: {'; '.join(erros)}")
@@ -2226,10 +2300,10 @@ class CriadorKitsService:
 
     def executar_exclusao_individual(self, id_kit: str, sku_kit: str) -> Dict:
         """
-        Deleta um Ãºnico produto do BaseLinker, remove do histÃ³rico local,
+        Deleta um único produto do BaseLinker, remove do histórico local,
         limpa o GTIN associado a esse SKU de kit e recicla o SKU.
         """
-        logger.warning(f"Iniciando exclusÃ£o individual -> SKU Kit={sku_kit} | ID Kit={id_kit}")
+        logger.warning(f"Iniciando exclusão individual -> SKU Kit={sku_kit} | ID Kit={id_kit}")
         
         # Deleta do BaseLinker
         sucesso_bl = False
@@ -2252,23 +2326,23 @@ class CriadorKitsService:
         gtins_kit = GtinKit.objects.filter(sku_kit=sku_kit).exclude(gtin='PENDENTE').exclude(gtin='').values_list('gtin', flat=True)
         for g in gtins_kit:
             try:
-                logger.warning(f"Chamando inativaÃ§Ã£o GS1 para o GTIN {g} devido Ã  exclusÃ£o individual.")
+                logger.warning(f"Chamando inativação GS1 para o GTIN {g} devido à exclusão individual.")
                 gs1.inativar_ou_excluir_produto(g)
             except Exception as e:
-                logger.error(f"Erro ao inativar GTIN {g} na GS1 durante exclusÃ£o: {e}")
+                logger.error(f"Erro ao inativar GTIN {g} na GS1 durante exclusão: {e}")
 
         # Recicla o SKU
         self._reciclar_numero(sku_kit)
 
-        # Deleta do histÃ³rico local
+        # Deleta do histórico local
         HistoricoKit.objects.filter(id_kit=id_kit).delete()
 
         # Deleta do banco de GTINs local (GtinKit)
         GtinKit.objects.filter(sku_kit=sku_kit).delete()
 
         if sucesso_bl:
-            msg = f"Produto {sku_kit} excluÃdo com sucesso do BaseLinker e GTIN local removido."
+            msg = f"Produto {sku_kit} excluído com sucesso do BaseLinker e GTIN local removido."
             return {"sucesso": True, "msg": msg}
         else:
-            msg = f"GTIN local e histÃ³rico de {sku_kit} limpos, mas falhou ao excluir no BaseLinker: {erro_bl}."
+            msg = f"GTIN local e histórico de {sku_kit} limpos, mas falhou ao excluir no BaseLinker: {erro_bl}."
             return {"sucesso": True, "msg": msg}
