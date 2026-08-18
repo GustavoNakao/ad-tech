@@ -346,16 +346,13 @@ class GeminiClient:
                     return texto
 
                 except _Erro429:
-                    # Cálculo de espera exponencial: 10s, 20s, 40s...
-                    espera_429 = 10 * (2 ** (tentativa - 1))
+                    espera_429 = 1
                     logger.warning(
-                        "Gemini 429: chave ...%s | modelo=%s. Aguardando %ds (Backoff Exponencial).",
-                        chave[-6:], modelo, espera_429,
+                        "Gemini 429: chave ...%s | modelo=%s. Rotacionando chave em 1s.",
+                        chave[-6:], modelo,
                     )
                     pool.marcar_429(chave)
                     erros.append(f"chave ...{chave[-6:]} 429")
-                    
-                    # Espera obrigatória para limpar o "burst" e respeitar a cota do projeto
                     time.sleep(espera_429)
                     break  # troca de chave, mantém o modelo
 

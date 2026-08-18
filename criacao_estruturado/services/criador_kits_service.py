@@ -124,6 +124,17 @@ SECOES_OBRIGATORIAS_NORM = {
 }
 
 
+def _is_sku_already_exists_error(exc: Exception) -> bool:
+    """Detecta mensagens de conflito de SKU vindas da API ou do banco."""
+    msg = str(exc or "").lower()
+    return any(token in msg for token in [
+        "sku already exists",
+        "duplicate sku",
+        "already exists",
+        "já existe",
+    ])
+
+
 def validar_descricao(desc: str) -> bool:
     """Verifica se todas as seções obrigatórias estão presentes na descrição de forma robusta e flexível."""
     desc_norm = normalizar_texto_validador(desc)
@@ -251,17 +262,29 @@ Sua única tarefa é gerar um ttulo neutro e descritivo para o produto fornecido
 ====================================
 ESTRUTURA RÍGIDA E OBRIGATÓRIA (NADA MAIS DEVE SER ACRESCENTADO)
 ====================================
-Gere o ttulo rigorosamente seguindo apenas estes quatro elementos na ordem abaixo:
+Gere o ttulo rigorosamente seguindo apenas estes elementos na ordem abaixo:
 1. [Quantidade] (apenas se for kit de mais de 1 unidade, ex: "Kit 2", "Kit 3". Para unitário, deixe vazio).
-2. [Tipo de Produto] (categoria/nome objetivo do produto, ex: "Cola Vinil", "Limpa Pedras", "Suporte TV", "Tira Manchas").
-3. [Formato / Especificação / Modelo / Compatibilidade] (especificação útil que identifique o item de forma real, ex: "17g", "Fixo 14 a 101 Polegadas", "Lngua", "para Reboco", "para Madeira", "para TV"). Use "para" ou "compattivel com" se fizer sentido.
-4. [Marca] (marca oficial e modelo, ex: "Tekbond", "Sanol Pro", "Promabond", "Clear").
+2. [Tipo de Produto] (categoria/nome objetivo do produto, ex: "Cola Vinil", "Tinta Spray", "Limpa Pedras", "Suporte TV").
+3. [Formato / Especificação / Modelo / Compatibilidade / Aplicação Fática] (especificação útil real, ex: "250g", "17g", "Fixo 14 a 101 Polegadas", "para Metal e Madeira", "Uso Interno e Externo", "Secagem Rápida", "para Reboco"). Use "para" ou "compatível com" se fizer sentido.
+4. [Marca] (APENAS se explicitamente informada no produto).
+
+====================================
+PROIBIÇÃO RIGOROSA DE ALUCINAÇÃO DE MARCAS:
+====================================
+- NUNCA invente, infira ou adicione marcas de terceiros (como "Colorart", "Artcolor", "Tekbond", "ChemiColor", "Sanol", etc.) se a marca NÃO constar explicitamente no nome ou atributos fornecidos do produto.
+- Se a marca não for fornecida no produto de entrada, simplesmente OMITA o elemento [Marca] do título. É terminantemente proibido deduzir ou inventar marcas por associação com a categoria.
+
+====================================
+META DE COMPRIMENTO (APROVEITAMENTO MÁXIMO DE SEO NO MERCADO LIVRE):
+====================================
+- O título DEVE ter ENTRE 53 E 59 CARACTERES (meta ideal: 55 a 59 caracteres).
+- EVITE RETORNAR TÍTULOS CURTOS (abaixo de 50 caracteres). Expanda o título adicionando especificações fáticas legítimas, superfícies compatíveis ("para Metal e Madeira"), finalidade técnica ("Uso Geral", "para Artesanato e Reparos") ou propriedades físicas reais ("Secagem Rápida", "Acabamento Metálico", "Bivolt", "Base Água").
 
 ====================================
 REGRAS CRÍTICAS DE CONTRAPARTIÇÃO (EVITE E BLOQUEIE):
 ====================================
 - O ttulo deve ter no MÁXIMO 60 caracteres.
-- NUNCA use adjetivos ou termos comerciais/subjetivos ("Premium", "Clássico", "Forte", "Eficaz", "Poderoso", "Potente", "Excelente", "Original", "Garantia", "Envio Rápido", etc.).
+- NUNCA use adjetivos ou termos comerciais/subjetivos ("Premium", "Clássico", "Forte", "Eficaz", "Poderoso", "Potente", "Excelente", "Original", "Garantia", "Envio Rápido", "Resistente", "Prático", "Alta Qualidade", etc.).
 - NUNCA use promessas de resultado, cura, emagrecimento ou tratamento.
 - NUNCA use repetições, emojis, pontuação excessiva ou caracteres especiais (- , . ! ? % & @ # / [ ] ( )).
 - Primeira letra maiúscula de cada palavra, restante em minúsculo (exceto siglas).
@@ -278,18 +301,29 @@ Sua tarefa é gerar 8 ttulos base únicos e altamente otimizados seguindo estrit
 ====================================
 ESTRUTURA RÍGIDA E OBRIGATÓRIA (NADA MAIS DEVE SER ACRESCENTADO)
 ====================================
-Gere os ttulos rigorosamente com base apenas nos elementos abaixo:
-1. [Tipo de Produto] (categoria/nome objetivo do produto, ex: "Cola Vinil", "Limpa Pedras", "Suporte TV", "Tira Manchas").
-2. [Formato / Especificação / Modelo / Compatibilidade] (especificação útil que identifique o item de forma real, ex: "17g", "Fixo 14 a 101 Polegadas", "Lngua", "para Reboco", "para Madeira", "para TV"). Use "para" ou "compattivel com" se fizer sentido.
-3. [Marca] (marca oficial e modelo, ex: "Tekbond", "Sanol Pro", "Promabond", "Clear").
+Gere os ttulos base rigorosamente com base nos elementos abaixo:
+1. [Tipo de Produto] (categoria/nome objetivo do produto, ex: "Cola Vinil", "Tinta Spray", "Limpa Pedras", "Suporte TV").
+2. [Formato / Especificação / Modelo / Compatibilidade / Aplicação Fática] (especificação útil real, ex: "250g", "17g", "Fixo 14 a 101 Polegadas", "para Metal e Madeira", "Uso Interno e Externo", "Secagem Rápida").
+3. [Marca] (APENAS se explicitamente informada no produto).
 
 *ATENÇÃO: NÃO inclua quantidades (ex: "Kit 2", "3 Unidades") na grade de ttulos. O sistema injetará as quantidades automaticamente no final.
 
 ====================================
+PROIBIÇÃO RIGOROSA DE ALUCINAÇÃO DE MARCAS:
+====================================
+- NUNCA invente, infira ou adicione marcas de terceiros (como "Colorart", "Artcolor", "Tekbond", "ChemiColor", "Sanol", etc.) se a marca NÃO constar explicitamente no nome ou atributos fornecidos do produto.
+- Se a marca não for fornecida no produto de entrada, simplesmente OMITA o elemento [Marca] do título. É terminantemente proibido deduzir ou inventar marcas por associação com a categoria.
+
+====================================
+META DE COMPRIMENTO BASE (APROVEITAMENTO MÁXIMO DE SEO):
+====================================
+- Cada título BASE deve ter ENTRE 45 E 52 CARACTERES. Como o sistema injetará "Kit N " (ex: "Kit 4 " = +6 chars) no início, o título final terá EXATAMENTE 53 a 58 caracteres.
+- NUNCA gere títulos base muito curtos (abaixo de 42 caracteres). Expanda a variação de cada título adicionando especificações fáticas legítimas, superfícies compatíveis ("para Metal e Madeira", "para Alvenaria"), finalidade de uso ("Uso Geral", "para Artesanato") ou características físicas ("Secagem Rápida", "Acabamento Metálico", "Bivolt", "Massa 250g").
+
+====================================
 REGRAS CRÍTICAS (EVITE E BLOQUEIE):
 ====================================
-- Cada ttulo deve ter no máximo 55 a 60 caracteres.
-- NUNCA use adjetivos ou termos comerciais/subjetivos ("Premium", "Clássico", "Forte", "Eficaz", "Poderoso", "Potente", "Excelente", "Original", "Garantia", "Envio Rápido", etc.).
+- NUNCA use adjetivos ou termos comerciais/subjetivos ("Premium", "Clássico", "Forte", "Eficaz", "Poderoso", "Potente", "Excelente", "Original", "Garantia", "Envio Rápido", "Resistente", "Prático", etc.).
 - NUNCA use promessas de resultado, cura, tratamento ou performance.
 - NENHUM caractere especial ou pontuação excessiva.
 
@@ -370,10 +404,9 @@ Para cada campo da lista "Campos Solicitados":
                   Acrescente " (conhecimento de mercado)" ao valor.
                   EXCEÇÃO: mesma regra das listas de valores permitidos.
 
-  4. AUSENTE    → omita a chave do JSON.
-                  EXCEÇÃO: campos [OBRIGATÓRIO] → use "Não informado".
+  4. AUSENTE    → OMITA COMPLETAMENTE a chave do JSON. NUNCA use "Não informado", "N/A", "null" ou "PREENCHER".
 
-Prioridade de confiança: Explícito > Inferível > Enriquecível > Ausente.
+Prioridade de confiança: Explícito > Inferível (apenas se óbvio) > Ausente (omitir chave).
 
 ====================================
 ETAPA 2 — VALIDAÇÃO ANTES DE RETORNAR
@@ -398,15 +431,14 @@ R3. Conflito texto × lista → priorize a lista (valor mais próximo
     semanticamente).
 R4. NUNCA extraia: "Código de barras", "EAN", "GTIN" ou "Motivo de GTIN
     vazio". O sistema preenche a identificação automaticamente via API.
-R5. NUNCA invente valores sem base no texto, inferência lógica clara
-    ou conhecimento de mercado verificável.
+R5. VOCÊ É UM EXTRATOR RIGOROSO DE DADOS. Extraia valores baseando-se EXCLUSIVAMENTE no texto fornecido. Se a informação não estiver explicitamente presente ou for indiscutível no texto, OMITA a chave. NUNCA adivinhe. NUNCA deduza. NUNCA invente.
 
 ====================================
 PADRONIZAÇÃO DE VALORES
 ====================================
 - Idioma       : Português brasileiro.
                  ✓ "Preto"  ✗ "Black" | ✓ "Azul marinho"  ✗ "Navy"
-- Medidas      : número + espaço + unidade → "500 ml", "15 cm", "2 kg"
+- Medidas      : número + espaço + unidade → "500 mL" (Volume: SEMPRE 'mL' com L maiúsculo), "15 cm" (Dimensões: SEMPRE número inteiro sem ponto ou vírgula, ex: 15 cm, 7 cm), "2 kg"
 - Booleanos    : "Sim" ou "Não"
 - Voltagem     : "110V" | "220V" | "Bivolt" | "Não se aplica"
 - Marcas       : capitalização correta → "Stanley", "3M", "Tramontina"
@@ -674,9 +706,11 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
         logger.info("[Agente 3] Gerando Descrição Copywriter (Gemini 2.5 Flash)...")
         desc = self._gerar_descricao(titulo, contexto, descricao_atual)
 
-        # --- AGENTE 4: FICHA TÉCNICA (Groq) ---
-        logger.info("[Agente 4] Extraindo Ficha Técnica (Groq)...")
-        atribs = self._gerar_ficha_tecnica(contexto, atributos_obrigatorios)
+        # --- AGENTE 4: FICHA TÉCNICA (Catálogo ML + Groq Restrito) ---
+        logger.info("[Agente 4] Extraindo Ficha Técnica (Catálogo ML + Groq Restrito)...")
+        marca_ctx = (features or {}).get("Marca") or (features or {}).get("marca") or ""
+        ean_ctx   = (features or {}).get("EAN") or (features or {}).get("ean") or (features or {}).get("Código universal de produto") or ""
+        atribs = self._gerar_ficha_tecnica(contexto, atributos_obrigatorios, ean=str(ean_ctx), marca=str(marca_ctx), category_id_ml=category_id_ml or "")
 
         # --- AGENTE 5: PALAVRAS-CHAVE (Groq) ---
         logger.info("[Agente 5] Identificando Palavras-chave SEO (Groq)...")
@@ -801,19 +835,31 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
                 }
 
                 titulos_temp = {}
+                curtos = []
                 for chave_ia, chave_sistema in mapa_chaves.items():
                     texto_titulo = str(titulos_brutos.get(chave_ia, "")).strip()
-                    titulos_temp[chave_sistema] = formatar_title_case(texto_titulo)
+                    fmt_t = formatar_title_case(texto_titulo)
+                    titulos_temp[chave_sistema] = fmt_t
+                    if fmt_t and len(fmt_t) < 42:
+                        curtos.append(f"{chave_ia} ({len(fmt_t)} chars)")
 
-                # Verifica se todos os 8 títulos foram gerados
+                # Verifica se todos os 8 títulos foram gerados e não estão excessivamente curtos
                 faltantes = [k for k, v in titulos_temp.items() if not v]
-                if not faltantes:
+                if not faltantes and not curtos:
                     titulos_grade = titulos_temp
                     logger.info(f"Grade aprovada na tentativa {tentativa + 1}. Estratégia SEO utilizada: {data_tit.get('estrategia_seo', 'Não informada')}")
                     break
                 else:
-                    feedback_erro = f"Faltaram os seguintes títulos no JSON: {faltantes}"
+                    erros = []
+                    if faltantes:
+                        erros.append(f"faltantes no JSON: {faltantes}")
+                    if curtos:
+                        erros.append(f"muito curtos (precisam ter entre 45 e 52 caracteres base): {curtos}")
+                    feedback_erro = "; ".join(erros)
                     logger.warning(f"Falha na tentativa {tentativa + 1}: {feedback_erro}")
+                    # Na última tentativa, se a grade estiver completa, aceita o melhor resultado disponível
+                    if tentativa == max_tentativas - 1 and titulos_temp and not faltantes:
+                        titulos_grade = titulos_temp
 
             except Exception as e:
                 feedback_erro = f"JSON inválido: {e}"
@@ -948,13 +994,105 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
 
         return desc or descricao_atual
 
-    def _gerar_ficha_tecnica(self, contexto: str, atributos_obrigatorios: Optional[List[str]]) -> Dict:
-        """Gera atributos da ficha técnica via Groq."""
-        import json
-
-        atribs = {}
+    def _gerar_ficha_tecnica(self, contexto: str, atributos_obrigatorios: Optional[List[str]], ean: str = "", marca: str = "", category_id_ml: str = "", produto_id: str = "0", sku: str = "", dados_internos: Optional[Dict] = None, quantidade: int = 1) -> Dict:
+        """
+        Orquestra a Ficha Técnica Inteligente através do FichaTecnicaOrchestrator:
+        Pipeline de 9 passos: Encontrar → Extrair → Comprovar → Normalizar → Validar → Auditar (Gemini 100%) → Corrigir/Bloquear → Publicar.
+        """
         if not atributos_obrigatorios:
-            return atribs
+            atributos_obrigatorios = []
+
+        try:
+            from criacao_estruturado.services.ficha_tecnica import FichaTecnicaOrchestrator
+            orchestrator = FichaTecnicaOrchestrator()
+            features_finais, relatorio = orchestrator.gerar_e_auditar_ficha_tecnica(
+                contexto=contexto,
+                atributos_obrigatorios=atributos_obrigatorios,
+                ean=ean,
+                marca=marca,
+                category_id_ml=category_id_ml,
+                produto_id=str(produto_id),
+                sku=str(sku),
+                dados_internos=dados_internos,
+                quantidade=quantidade
+            )
+            return features_finais
+        except Exception as e_orch:
+            logger.warning("[CriadorKitsService] Falha no orquestrador da Ficha Técnica: %s — aplicando fallback de sanitização.", e_orch)
+            return {}
+
+    @staticmethod
+    def _padronizar_atributos_features(features: Dict) -> Dict:
+        """
+        Padroniza e purga valores de atributos nas features:
+        1. Elimina completamente chaves com valores ausentes ou placeholders ('Não informado', 'N/A', 'PREENCHER', etc.).
+        2. Formata unidades de volume de 'ml'/'Ml'/'ML' para 'mL' (ex: '350 mL', 'mL').
+        3. Garante que dimensões (altura, largura, comprimento, profundidade) sejam números inteiros sem ponto ou vírgula (ex: '7 cm').
+        """
+        import re
+
+        if not isinstance(features, dict):
+            return features
+
+        PROIBIDOS = {
+            "não informado", "nao informado", "a informar", "desconhecido", 
+            "null", "n/a", "preencher", "não se aplica", "nao se aplica", ""
+        }
+
+        novas_features = {}
+        for k, v in features.items():
+            if v is None:
+                continue
+
+            str_v = str(v).strip()
+            v_lower = str_v.lower()
+
+            # Purga placeholders e valores não informados para evitar poluição visual e rejeição de anúncio
+            if v_lower in PROIBIDOS or v_lower.startswith("preencher"):
+                continue
+
+            k_lower = str(k).lower()
+
+            # 1. Inteiros para altura, largura, comprimento, profundidade
+            if any(dim in k_lower for dim in ("altura", "largura", "comprimento", "profundidade")):
+                def _arredondar_num(m):
+                    num_str = m.group(0).replace(",", ".")
+                    try:
+                        return str(int(round(float(num_str))))
+                    except ValueError:
+                        return m.group(0)
+
+                str_v = re.sub(r'\b\d+(?:[.,]\d+)?\b', _arredondar_num, str_v)
+
+            # 2. Padronização de volume para 'mL' (capital L)
+            if v_lower == "ml":
+                str_v = "mL"
+            else:
+                str_v = re.sub(r'(\b\d+\s*)ml\b', r'\1mL', str_v, flags=re.IGNORECASE)
+                str_v = re.sub(r'\bml\b', 'mL', str_v)
+                str_v = re.sub(r'\bMl\b', 'mL', str_v)
+            # Mapeia nomes alternativos de catálogo para nomes canônicos do ML
+            k_canonico = k
+            if k_lower == "volume da unidade":
+                k_canonico = "Volume líquido"
+            elif k_lower == "peso da unidade":
+                k_canonico = "Peso líquido"
+
+            # 3. Força 'Tipo de unidade' e 'Unidade de venda' como 'Unidade'
+            if k_lower in ("tipo de unidade", "unidade de venda"):
+                str_v = "Unidade"
+
+            # Purga chaves desnecessárias de catálogo que não existem no formulário do BaseLinker
+            if k_lower in ("funções", "formato do produto", "ambientes", "com secagem rápida"):
+                continue
+
+            novas_features[k_canonico] = str_v
+
+        return novas_features
+
+    def _chamar_llm_ficha_tecnica(self, contexto: str, atributos_obrigatorios: List[str]) -> Dict:
+        """Chama o Groq/Llama para extrair atributos técnicos a partir do contexto local do produto."""
+        import json
 
         input_tech = f"{contexto}\nCampos Obrigatórios: {', '.join(atributos_obrigatorios)}"
         res_tech = self.groq.chat(
@@ -965,15 +1103,144 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
         try:
             if res_tech:
                 data_tech = json.loads(res_tech.strip())
-                atribs = data_tech.get("atributos", {})
-                logger.info(f"Atributos extraídos: {len(atribs)} campos.")
-            else:
-                logger.warning("Ficha Técnica: resposta vazia.")
+                return data_tech.get("atributos", {})
+            logger.warning("Ficha Técnica LLM: resposta vazia.")
         except Exception as e:
             res_snippet = res_tech[:200] if res_tech else "None"
-            logger.warning(f"Falha no JSON da Ficha Técnica: {e} | {res_snippet}")
+            logger.warning(f"Falha no JSON da Ficha Técnica LLM: {e} | {res_snippet}")
+        return {}
 
-        return atribs
+    def _enriquecer_via_web(self, contexto: str, campos_ausentes: List[str]) -> Dict:
+        """Pesquisa o produto na web e usa LLM para extrair dados técnicos dos campos ainda ausentes."""
+        import re
+
+        # Extrai o nome do produto do contexto (primeira linha após "Produto:")
+        nome_produto = ""
+        for linha in contexto.splitlines():
+            if linha.strip().lower().startswith("produto:"):
+                nome_produto = linha.split(":", 1)[-1].strip()
+                break
+        if not nome_produto:
+            return {}
+
+        # Extrai a marca do contexto (linha "Atributos:" ou campo "Marca" dentro do dict)
+        marca = ""
+        for linha in contexto.splitlines():
+            if "atributos:" in linha.lower() or "features:" in linha.lower():
+                match = re.search(r"['\"]?[Mm]arca['\"]?\s*:\s*['\"]?([A-Za-z0-9\s\-\.]+)['\"]?", linha)
+                if match:
+                    candidato = match.group(1).strip().strip("',}")
+                    if candidato and "informado" not in candidato.lower():
+                        marca = candidato
+                        break
+
+        conteudo_web = self._buscar_conteudo_web(nome_produto, marca=marca)
+        if not conteudo_web:
+            logger.info("[Web Enrich] Nenhum conteúdo útil encontrado na web para '%s'.", nome_produto[:60])
+            return {}
+
+        return self._extrair_atribs_do_conteudo_web(conteudo_web, nome_produto, campos_ausentes)
+
+    def _buscar_conteudo_web(self, nome_produto: str, marca: str = "") -> str:
+        """Busca e agrega conteúdo técnico sobre o produto nos sites dos fabricantes/distribuidores via DuckDuckGo HTML."""
+        import re
+        from urllib.parse import quote_plus, unquote
+        from curl_cffi import requests
+
+        # Limpa o nome do produto: remove SKU inicial (ex: "23131006900 | ") e prefixos "Kit N"
+        nome_limpo = re.sub(r'^[\d\s\|\-]+', '', nome_produto).strip()
+        nome_limpo = re.sub(r'^Kit\s+\d+\s+', '', nome_limpo, flags=re.IGNORECASE).strip()
+        nome_limpo = re.sub(r'/\s*\d+\s*[gGkK]', '', nome_limpo).strip()
+
+        if not nome_limpo:
+            nome_limpo = nome_produto
+
+        termo_marca = f" {marca.strip()}" if marca and marca.lower() not in nome_limpo.lower() else ""
+        query_str = f"{nome_limpo}{termo_marca} ficha técnica especificações"
+        logger.info("[Web Enrich] Buscando na web: '%s'", query_str[:60])
+
+        dominios_excluir = [
+            "duckduckgo", "google", "youtube", "facebook", "instagram", "wikipedia",
+            "mercadolivre", "amazon", "shopee", "americanas", "submarino",
+            "magazineluiza", "magalu", "extra", "kabum", "buscape"
+        ]
+
+        conteudo_total = ""
+
+        try:
+            url_search = f"https://html.duckduckgo.com/html/?q={quote_plus(query_str)}"
+            resp = requests.get(url_search, impersonate="chrome110", timeout=10)
+            if resp.status_code == 200:
+                # 1. Extrai trechos de texto dos resultados da busca (snippets)
+                snippets = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', resp.text, re.DOTALL)
+                for s in snippets[:8]:
+                    limpo = re.sub(r'<[^>]+>', ' ', s)
+                    limpo = re.sub(r'\s+', ' ', limpo).strip()
+                    if len(limpo) > 20:
+                        conteudo_total += f"\n- {limpo}"
+
+                # 2. Tenta acessar as 2 primeiras páginas técnicas encontradas
+                raw_urls = re.findall(r'<a class="result__url"[^>]*href="([^"]+)"', resp.text)
+                clean_urls = []
+                for u in raw_urls:
+                    decoded = unquote(u.strip())
+                    if "//duckduckgo.com/l/?uddg=" in decoded:
+                        decoded = unquote(decoded.split("uddg=")[-1].split("&")[0])
+                    if not any(bloco in decoded.lower() for bloco in dominios_excluir):
+                        clean_urls.append(decoded)
+
+                for site_url in clean_urls[:2]:
+                    try:
+                        r = requests.get(site_url, impersonate="chrome110", timeout=8)
+                        if r.status_code == 200 and len(r.text) > 500:
+                            texto_limpo = re.sub(r'<[^>]+>', ' ', r.text)
+                            texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()
+                            conteudo_total += f"\n\n[Fonte: {site_url[:80]}]\n{texto_limpo[:2500]}"
+                            if len(conteudo_total) > 8000:
+                                break
+                    except Exception as e_site:
+                        logger.debug("[Web Enrich] Falha ao acessar %s: %s", site_url[:80], str(e_site))
+                        continue
+
+            return conteudo_total.strip()
+
+        except Exception as e:
+            logger.warning("[Web Enrich] Erro na busca web para '%s': %s", nome_limpo[:50], str(e))
+            return ""
+
+    def _extrair_atribs_do_conteudo_web(self, conteudo_web: str, nome_produto: str, campos_ausentes: List[str]) -> Dict:
+        """Usa o LLM para extrair atributos técnicos específicos do conteúdo de páginas web."""
+        import json
+
+        campos_str = ", ".join(campos_ausentes)
+        prompt_web = (
+            "Você é um extrator de dados técnicos de produtos. "
+            "Analise o conteúdo de páginas web abaixo e extraia EXCLUSIVAMENTE valores "
+            "que estejam EXPLICITAMENTE presentes no texto. "
+            "NUNCA invente ou infira valores. Se um campo não estiver no texto, omita-o do JSON. "
+            "Retorne SOMENTE JSON válido no formato: {\"atributos\": {\"Campo\": \"Valor\"}}"
+        )
+        user_input = (
+            f"Produto: {nome_produto}\n"
+            f"Campos a extrair: {campos_str}\n\n"
+            f"Conteúdo das páginas:\n{conteudo_web[:6000]}"
+        )
+
+        try:
+            res = self.groq.chat(
+                system_prompt=prompt_web,
+                user_input=user_input,
+                modelo="llama-3.3-70b-versatile",
+            )
+            if res:
+                data = json.loads(res.strip())
+                atribs = data.get("atributos", {})
+                encontrados = [k for k, v in atribs.items() if v and v != "Não informado"]
+                logger.info("[Web Enrich] Campos preenchidos via web: %s", encontrados)
+                return atribs
+        except Exception as e:
+            logger.warning("[Web Enrich] Falha ao extrair atributos do conteúdo web: %s", str(e))
+        return {}
 
     def _gerar_keywords(self, titulo: str, contexto: str) -> Dict:
         """Gera palavras-chave SEO via Groq."""
@@ -1179,7 +1446,50 @@ class CriadorKitsService:
                     features[item.get("name")] = item.get("value")
         elif isinstance(feat_raw, dict):
             features = dict(feat_raw)
-        return features
+        return self._padronizar_atributos_features(features)
+
+    @staticmethod
+    def _padronizar_atributos_features(features: Dict) -> Dict:
+        return SEOGenerator._padronizar_atributos_features(features)
+
+    @staticmethod
+    def _resolver_atributos_fisicos_kit(features: Dict, quantidade: int = 1) -> Dict:
+        """
+        Garante a integridade fática de kits e unidades:
+        - Se quantidade > 1: Formato de venda = 'Kit', Quantidade = N, Unidades por kit = N, Unidades por embalagem = N
+        - Se quantidade == 1: Formato de venda = 'Unidade', Quantidade = 1, Unidades por kit = 1, Unidades por embalagem = 1
+        - Condição do item = 'Novo'
+        """
+        if not isinstance(features, dict):
+            return features
+
+        novas_features = dict(features)
+        qtd_str = str(quantidade)
+        fmt_venda = "Kit" if quantidade > 1 else "Unidade"
+
+        for k in list(novas_features.keys()):
+            k_lower = str(k).strip().lower()
+
+            if k_lower in ("formato de venda", "formato de venda ", "formatodevenda"):
+                novas_features[k] = fmt_venda
+
+            if k_lower in ("quantidade", "quantidade ", "quantidade de peças", "quantidade de unidades"):
+                novas_features[k] = qtd_str
+
+            if k_lower in ("unidades por kit", "unidades por embalagem"):
+                novas_features[k] = qtd_str
+
+            if k_lower in ("condição do item", "item_condition"):
+                novas_features[k] = "Novo"
+
+        novas_features["Formato de venda"] = fmt_venda
+        novas_features["Unidades por kit"] = qtd_str
+        novas_features["Quantidade"] = qtd_str
+        novas_features["Condição do item"] = "Novo"
+        novas_features["Tipo de unidade"] = "Unidade"
+        novas_features["Unidade de venda"] = "Unidade"
+
+        return novas_features
 
     def _extrair_imagens(self, dados: Dict) -> Dict[str, str]:
         imgs_raw = dados.get("images") or []
@@ -1254,31 +1564,16 @@ class CriadorKitsService:
         
         # Força os campos obrigatórios na Ficha Técnica (Features)
         if "features" in campos:
-            features_ref = campos["features"]
-            has_cond = False
-            has_fmt = False
-            for k in list(features_ref.keys()):
-                k_lower = k.lower()
-                if k_lower in ("condição do item", "item_condition"):
-                    features_ref[k] = "Novo"
-                    has_cond = True
-                if k_lower == "formato de venda":
-                    # No caso isolado, sem quantidade, usamos Unidade como padrão se nao encontrar
-                    features_ref[k] = "Unidade"
-                    has_fmt = True
-            
-            if not has_cond:
-                features_ref["Condição do item"] = "Novo"
-            if not has_fmt:
-                features_ref["Formato de venda"] = "Unidade"
+            campos["features"] = self._resolver_atributos_fisicos_kit(campos["features"], quantidade=1)
 
             # Limpa Modelo se for puramente numérico (SKU) ou usar placeholders proibidos
-            for k in list(features_ref.keys()):
+            for k in list(campos["features"].keys()):
                 if "modelo" in k.lower() or "model" in k.lower():
-                    v = str(features_ref[k]).strip()
+                    v = str(campos["features"][k]).strip()
                     if not v or v.isdigit() or any(forbidden in v.lower() for forbidden in ["não informado", "a informar", "desconhecido", "n/a", "null", "preencher", "não se aplica", "nao se aplica"]):
-                        del features_ref[k]
+                        del campos["features"][k]
 
+        campos["features"] = self._padronizar_atributos_features(campos.get("features", {}))
         return campos
 
     def _buscar_atributos_obrigatorios_ml(
@@ -1290,17 +1585,18 @@ class CriadorKitsService:
             "código universal", "ean", "gtin", "código de barras",
             "autorização sanitária", "aviso de operação", "certificado da afe",
             "licença do conama", "r.s/nso", "registro de producto do ms",
-            "cofepris", "rpptm", "registro/nso", "comunicação prévia na anvisa"
+            "cofepris", "rpptm", "registro/nso", "comunicação prévia na anvisa",
+            "iva", "ieps", "imposto", "chave do produto", "chave da unidade", "nota fiscal"
         ]
         
         if category_id_ml and category_id_ml != "979589":
             try:
-                logger.warning(f"[Ficha Tecnica] Verificando campos para Cat: {category_id_ml}")
+                logger.warning(f"[Ficha Técnica] Verificando campos da Ficha Técnica para Cat: {category_id_ml}")
                 ml_client = MercadoLivreClient()
-                obrigatorios_raw = ml_client.ficha_tecnica(category_id_ml)
+                campos_raw = ml_client.ficha_tecnica(category_id_ml, apenas_obrigatorios=False)
                 nomes_existentes = {k.lower() for k in features.keys()}
 
-                for f in obrigatorios_raw:
+                for f in campos_raw:
                     n = f.get("name")
                     if not n: continue
                     
@@ -1314,13 +1610,14 @@ class CriadorKitsService:
                         if valor_fisico:
                             features[n] = valor_fisico
                         else:
-                            campo_prompt = f"{n} [OBRIGATÓRIO]"
+                            tag_status = "[OBRIGATÓRIO]" if f.get("required") else "[RECOMENDADO]"
+                            campo_prompt = f"{n} {tag_status}"
                             if allowed_values:
                                 vals_str = ", ".join(allowed_values[:10])
-                                campo_prompt = f"{n} [OBRIGATÓRIO] (Valores permitidos: {vals_str})"
+                                campo_prompt = f"{n} {tag_status} (Valores permitidos: {vals_str})"
                             lista_obrigatorios_nomes.append(campo_prompt)
 
-                logger.info(f"[Ficha Tecnica] Pendentes para IA: {len(lista_obrigatorios_nomes)}")
+                logger.info(f"[Ficha Técnica] Campos estruturados para IA: {len(lista_obrigatorios_nomes)}")
             except Exception as exc:
                 logger.error(f"[Ficha Técnica] Erro ao buscar dados do ML: {exc}")
         return lista_obrigatorios_nomes
@@ -1587,15 +1884,15 @@ class CriadorKitsService:
 
         if "altura" in n:
             val = dados.get("height")
-            return f"{val} cm" if val and float(val) > 0 else None
+            return f"{int(round(float(val)))} cm" if val and float(val) > 0 else None
 
         if "largura" in n:
             val = dados.get("width")
-            return f"{val} cm" if val and float(val) > 0 else None
+            return f"{int(round(float(val)))} cm" if val and float(val) > 0 else None
 
         if "comprimento" in n or "profundidade" in n:
             val = dados.get("length")
-            return f"{val} cm" if val and float(val) > 0 else None
+            return f"{int(round(float(val)))} cm" if val and float(val) > 0 else None
 
         if "peso" in n:
             val = dados.get("weight")
@@ -1677,7 +1974,7 @@ class CriadorKitsService:
     ) -> Dict:
         """
         Cria a grade completa de 8 anúncios (1/2/3/4un x Clássico/Premium) no BaseLinker.
-        Suporta até 4 SKUs secundários para Kit Misto.
+        Permite vários SKUs secundários para Kit Misto.
         """
         logger.warning(f"Iniciando criação de GRADE (8 anúncios) -> SKU Origem={sku_origem} | EAN Unitário={gerar_ean_unitario}")
         
@@ -1879,28 +2176,14 @@ class CriadorKitsService:
             if anuncio.quantidade == 1 and not precisa_gerar_unitario:
                 ean_final = dados.get("ean", "")
 
-            # Atualiza features por variação
+            # Atualiza e valida features por variação de kit
             features_var = features_base.copy()
-            has_cond = False
-            has_fmt = False
-            
-            for k in list(features_var.keys()):
-                k_lower = k.lower()
-                if ean_final and ("código universal" in k_lower or "ean" in k_lower):
-                    features_var[k] = ean_final
-                if "unidades por kit" in k_lower or "unidades por embalagem" in k_lower:
-                    features_var[k] = str(anuncio.quantidade)
-                if k_lower in ("condição do item", "item_condition"):
-                    features_var[k] = "Novo"
-                    has_cond = True
-                if k_lower == "formato de venda":
-                    features_var[k] = "Unidade" if anuncio.quantidade == 1 else "Kit"
-                    has_fmt = True
+            if ean_final:
+                for k in list(features_var.keys()):
+                    if "código universal" in k.lower() or "ean" in k.lower():
+                        features_var[k] = ean_final
 
-            if not has_cond:
-                features_var["Condição do item"] = "Novo"
-            if not has_fmt:
-                features_var["Formato de venda"] = "Unidade" if anuncio.quantidade == 1 else "Kit"
+            features_var = self._resolver_atributos_fisicos_kit(features_var, quantidade=anuncio.quantidade)
 
             # Garante que o Modelo nunca seja inválido, vazio ou use placeholders proibidos
             has_modelo = False
@@ -1911,6 +2194,13 @@ class CriadorKitsService:
                     v = str(features_var[k]).strip()
                     if not v or any(forbidden in v.lower() for forbidden in ["não informado", "a informar", "desconhecido", "n/a", "null", "preencher", "não se aplica", "nao se aplica"]):
                         features_var[k] = base_sku
+
+            if not has_modelo:
+                for n_p in lista_obrigatorios:
+                    n_limpo = re.sub(r'\s*\(Valores permitidos:.*?\)', '', n_p).strip()
+                    n_limpo = n_limpo.replace(" [OBRIGATÓRIO]", "").strip()
+                    if "modelo" in n_limpo.lower() or "model" in n_limpo.lower():
+                        features_var[n_limpo] = base_sku
 
             if not has_modelo:
                 for n_p in lista_obrigatorios:

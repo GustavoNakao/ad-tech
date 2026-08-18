@@ -29,6 +29,7 @@ from urllib.parse import unquote, urlparse
 
 import requests
 from decouple import config
+from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger("integracoes.mercadolivre")
@@ -224,6 +225,29 @@ class MercadoLivreClient:
             if self._renovar_token():
                 data = self._get_raw(url, self._headers_auth(), params)
         return data
+
+    def _post_auth(self, endpoint: str, payload: Optional[dict] = None, params: Optional[dict] = None) -> Optional[dict]:
+        """POST autenticado — usado em endpoints condicionais e top values do ML."""
+        self._renovar_token_se_necessario()
+        url = f"{ML_API_URL}/{endpoint.lstrip('/')}"
+        self._aguardar_rate_limit()
+        for tentativa in range(1, self.MAX_RETRIES + 1):
+            try:
+                resp = requests.post(url, headers=self._headers_auth(), json=payload, params=params, timeout=self.TIMEOUT)
+                if resp.status_code == 429:
+                    espera = int(resp.headers.get("Retry-After", 15))
+                    logger.warning("ML 429 POST — aguardando %ds...", espera)
+                    time.sleep(espera)
+                    continue
+                if resp.status_code in (200, 201):
+                    return resp.json()
+                logger.debug("ML POST %s → %d", endpoint[-60:], resp.status_code)
+                return None
+            except requests.exceptions.RequestException as exc:
+                logger.warning("ML POST tentativa %d/%d falhou: %s", tentativa, self.MAX_RETRIES, exc)
+                if tentativa < self.MAX_RETRIES:
+                    time.sleep(2 ** tentativa)
+        return None
 
     def _get_pub(self, endpoint: str, params: Optional[dict] = None) -> Optional[dict]:
         """GET público SEM Authorization — resolve 403 em itens de terceiros."""
@@ -687,10 +711,26 @@ class MercadoLivreClient:
                     for a in item.get("attributes", [])
                 ],
             })
+        # Regra de Negócio de Loja: produtos spray / aerossol pertencem a MLB271283 (Tintas Sprays)
+        if any(term in titulo.lower() for term in ["spray", "aerossol"]):
+            idx_spray = next((i for i, r in enumerate(resultados) if r.get("category_id") == "MLB271283"), None)
+            if idx_spray is not None and idx_spray != 0:
+                item_spray = resultados.pop(idx_spray)
+                resultados.insert(0, item_spray)
+            elif not any(r.get("category_id") == "MLB271283" for r in resultados):
+                resultados.insert(0, {
+                    "category_id": "MLB271283",
+                    "category_name": "Tintas Sprays",
+                    "domain_id": "PAINTS_AND_VARNISHES",
+                    "domain_name": "Tintas e Vernizes",
+                    "confiavel": True,
+                    "atributos": []
+                })
+
         if titulo != titulo_limpo:
-            logger.info("predict_categoria '%s' (limpo: '%s') → %d resultado(s).", titulo[:50], titulo_limpo[:50], len(resultados))
+            logger.info("predict_categoria '%s' (limpo: '%s') → %d resultado(s). Top Cat=%s", titulo[:50], titulo_limpo[:50], len(resultados), resultados[0]["category_id"] if resultados else "None")
         else:
-            logger.info("predict_categoria '%s' → %d resultado(s).", titulo[:50], len(resultados))
+            logger.info("predict_categoria '%s' → %d resultado(s). Top Cat=%s", titulo[:50], len(resultados), resultados[0]["category_id"] if resultados else "None")
         return resultados
 
     def detalhes_categoria(self, category_id: str) -> Optional[dict]:
@@ -710,42 +750,49 @@ class MercadoLivreClient:
         }
 
 
-    def ficha_tecnica(self, category_id: str, apenas_obrigatorios: bool = True) -> list[dict]:
+    def ficha_tecnica(self, category_id: str, apenas_obrigatorios: bool = False) -> list[dict]:
         """
-        Consulta os campos obrigatórios e principais da ficha técnica da categoria.
+        Consulta os campos da ficha técnica da categoria via Endpoint moderno technical_specs/input.
+        Retorna atributos obrigatórios e principais recomendados organizados.
         """
         # --- 1. Nova Ficha Técnica (technical_specs/input) ---
         data = self._get_auth(f"categories/{category_id}/technical_specs/input")
         if data and 'groups' in data:
             candidatos = []
-            for i, group in enumerate(data.get('groups', [])):
+            vistos: set = set()
+            for group in data.get('groups', []):
                 for component in group.get('components', []):
                     for attr in component.get('attributes', []):
                         field_id   = attr.get("id")
                         field_name = attr.get("name") or component.get("label") or field_id
-                        tags       = attr.get('tags', [])
-                        
+                        if not field_id or field_id in vistos:
+                            continue
+
+                        tags = attr.get('tags', [])
+
                         # Tags de Obrigatoriedade
                         is_req = False
                         if isinstance(tags, list):
-                            if any(t in tags for t in ['required', 'new_required', 'conditional_required']):
+                            if any(t in tags for t in ['required', 'new_required', 'conditional_required', 'catalog_required']):
                                 is_req = True
                         elif isinstance(tags, dict):
-                            if any(tags.get(t) for t in ['required', 'new_required', 'conditional_required']):
+                            if any(tags.get(t) for t in ['required', 'new_required', 'conditional_required', 'catalog_required']):
                                 is_req = True
-                        
+
                         if apenas_obrigatorios and not is_req:
                             continue
-                            
+
+                        vistos.add(field_id)
                         candidatos.append({
                             "id": field_id,
                             "name": field_name,
                             "required": is_req,
                             "values": [v.get("name") for v in attr.get("values", []) if v.get("name")]
                         })
-            
+
             if candidatos:
-                return candidatos[:20]
+                candidatos.sort(key=lambda x: not x["required"])
+                return candidatos[:25]
 
         # --- 2. Fallback: Atributos Clássicos (attributes) ---
         data_alt = self._get_auth(f"categories/{category_id}/attributes")
@@ -753,7 +800,7 @@ class MercadoLivreClient:
             res = []
             for a in data_alt:
                 tags = a.get("tags", {})
-                
+
                 is_req = False
                 if isinstance(tags, dict):
                     if any(tags.get(t) for t in ["required", "new_required", "catalog_required", "conditional_required"]):
@@ -761,19 +808,105 @@ class MercadoLivreClient:
                 elif isinstance(tags, list):
                     if any(t in tags for t in ["required", "new_required", "catalog_required", "conditional_required"]):
                         is_req = True
-                
+
                 if apenas_obrigatorios and not is_req:
                     continue
-                    
+
                 res.append({
                     "id": a.get("id"),
                     "name": a.get("name"),
                     "required": is_req,
                     "values": [v.get("name") for v in a.get("values", []) if v.get("name")]
                 })
-            return res[:20]
-            
+            res.sort(key=lambda x: not x["required"])
+            return res[:25]
+
         return []
+
+    def technical_specs_input(self, category_id: str, apenas_obrigatorios: bool = False) -> list[dict]:
+        """Busca atributos da ficha técnica da categoria via /technical_specs/input."""
+        data = self._get_auth(f"categories/{category_id}/technical_specs/input")
+        if not data:
+            return []
+
+        attrs: list[dict] = []
+        if isinstance(data, dict) and 'groups' in data:
+            vistos: set = set()
+            for group in data.get('groups', []):
+                for component in group.get('components', []):
+                    for attr in component.get('attributes', []):
+                        field_id = attr.get('id')
+                        field_name = attr.get('name') or component.get('label') or field_id
+                        if not field_id or field_id in vistos:
+                            continue
+                        tags = attr.get('tags', [])
+                        is_req = False
+                        if isinstance(tags, list):
+                            if any(t in tags for t in ['required', 'new_required', 'conditional_required', 'catalog_required']):
+                                is_req = True
+                        elif isinstance(tags, dict):
+                            if any(tags.get(t) for t in ['required', 'new_required', 'conditional_required', 'catalog_required']):
+                                is_req = True
+                        if apenas_obrigatorios and not is_req:
+                            continue
+                        vistos.add(field_id)
+                        attrs.append({
+                            'id': field_id,
+                            'name': field_name,
+                            'required': is_req,
+                            'values': [v.get('name') for v in attr.get('values', []) if v.get('name')],
+                        })
+            return attrs
+
+        if isinstance(data, list):
+            return [
+                {
+                    'id': item.get('id'),
+                    'name': item.get('name'),
+                    'required': bool(item.get('required')),
+                    'values': [v.get('name') for v in item.get('values', []) if v.get('name')],
+                }
+                for item in data if item.get('id')
+            ]
+        return []
+
+    def atributos_condicionais(self, category_id: str, payload: Optional[dict] = None) -> list[dict]:
+        """Consulta atributos condicionalmente obrigatórios em /categories/{id}/attributes/conditional."""
+        if not category_id:
+            return []
+
+        site = str(ML_SITE or '').upper()
+        if site not in {'MLA', 'MLB', 'MLM'}:
+            return []
+
+        data = self._post_auth(f"categories/{category_id}/attributes/conditional", payload or {})
+        if not data:
+            return []
+
+        required_attrs = data.get('required_attributes') or data.get('requiredAttributes') or []
+        if not isinstance(required_attrs, list):
+            return []
+
+        return [
+            {
+                'id': item.get('id'),
+                'name': item.get('name') or item.get('id'),
+                'required': True,
+                'values': item.get('values') or [],
+            }
+            for item in required_attrs if item.get('id')
+        ]
+
+    def top_values(self, domain_id: str, attribute_id: str) -> list[dict]:
+        """Busca valores mais usados para um atributo em um domínio via /catalog_domains/{domain_id}/attributes/{attribute_id}/top_values."""
+        if not domain_id or not attribute_id:
+            return []
+        data = self._post_auth(f"catalog_domains/{domain_id}/attributes/{attribute_id}/top_values", payload={})
+        if not data:
+            return []
+        if isinstance(data, list):
+            return data
+        return data.get('values') or data.get('results') or []
 
     def buscar_categorias(self, query: str, limite: int = 5) -> list[dict]:
         """Autocomplete de categorias para o Admin via domain_discovery."""
@@ -827,3 +960,102 @@ class MercadoLivreClient:
     def detalhar_caso_bpp(self, case_id: str) -> Optional[dict]:
         """Consulta os detalhes de uma denúncia específica de marca."""
         return self._get_auth(f"moderations/pppi/case/{case_id}")
+
+    # =========================================================================
+    # CATÁLOGO OFICIAL DO ML (GET /products/search) — FONTE PRIMÁRIA DA FICHA TÉCNICA
+    # =========================================================================
+
+    def buscar_atributos_catalogo_ml(self, ean: str = "", termo_busca: str = "", marca: str = "", category_id: str = "") -> dict:
+        """
+        Busca o produto oficial no Catálogo do Mercado Livre (GET /products/search).
+        
+        Se category_id for informado (categoria definida pelo usuário no app), a busca é 
+        restrita estritamente aos produtos de catálogo dentro daquela categoria.
+        """
+        queries_tentar = []
+        
+        # 1. Busca por EAN (código de barras original do fabricante) se legítimo
+        ean_limpo = str(ean).strip()
+        if ean_limpo and len(ean_limpo) >= 12 and ean_limpo.isdigit():
+            queries_tentar.append(ean_limpo)
+
+        # 2. Busca por nome limpo do produto base (sem prefixos SKU/Kit N) + marca
+        if termo_busca:
+            nome_limpo = re.sub(r'^[\d\s\|\-]+', '', termo_busca).strip()
+            nome_limpo = re.sub(r'^Kit\s+\d+\s+', '', nome_limpo, flags=re.IGNORECASE).strip()
+            nome_limpo = re.sub(r'/\s*\d+\s*[gGkK]', '', nome_limpo).strip()
+            
+            marca_invalida = any(m in marca.lower() for m in ["marca não informada", "não informado", "nao informado", "n/a", "sem marca", "indefinido"])
+            termo_marca = f" {marca.strip()}" if marca and not marca_invalida and marca.lower() not in nome_limpo.lower() else ""
+            if nome_limpo:
+                queries_tentar.append(f"{nome_limpo}{termo_marca}".strip())
+
+        atributos_catalogo = {}
+
+        for q in queries_tentar:
+            if not q:
+                continue
+                
+            params = {"site_id": "MLB", "status": "active", "q": q}
+            if category_id and category_id != "979589":
+                params["category_id"] = str(category_id).strip()
+
+            logger.info("[Catálogo ML] Buscando produto de catálogo (Cat: %s) para query: '%s'", params.get("category_id", "Todas"), q[:60])
+            res = self._get_auth("products/search", params=params)
+            
+            if res and isinstance(res, dict) and res.get("results"):
+                for prod in res["results"]:
+                    raw_attrs = prod.get("attributes", [])
+                    if not raw_attrs:
+                        continue
+                    
+                    prod_name = (prod.get("name") or prod.get("title") or "").lower()
+                    if marca and marca.lower() not in prod_name:
+                        cand_brand = next((a.get("value_name") for a in raw_attrs if a.get("id") == "BRAND"), "")
+                        if marca.lower() not in cand_brand.lower():
+                            continue
+
+                    MAPA_SINONIMOS = {
+                        "volume da unidade": "Volume líquido",
+                        "peso da unidade": "Peso líquido",
+                    }
+                    for a in raw_attrs:
+                        val = a.get("value_name") or a.get("value_id")
+                        name = a.get("name")
+                        if name and val and str(val).lower() not in ("não informado", "null", "n/a", "preencher", ""):
+                            # Mapeia sinônimos para os nomes canônicos da categoria ML
+                            name_canonico = MAPA_SINONIMOS.get(name.strip().lower(), name)
+                            if name_canonico.lower() not in ("unidades por kit", "quantidade", "formato de venda", "código universal de produto", "gtin", "ean"):
+                                atributos_catalogo[name_canonico] = str(val)
+
+                    if atributos_catalogo:
+                        return atributos_catalogo
+
+        return atributos_catalogo
+
+    def obter_atributos_categoria_ml(self, category_id: str) -> List[dict]:
+        """
+        Retorna a lista completa de especificações/atributos da categoria na API do ML
+        (com tags, valores permitidos, ids e hierarquia).
+        Cache de 24 horas (86400s) por category_id.
+        """
+        cat_clean = str(category_id or "").strip()
+        if not cat_clean or cat_clean == "979589":
+            return []
+
+        cache_key = f"ml_category_attributes_v2_{cat_clean}"
+        cached = cache.get(cache_key)
+        if cached is not None and isinstance(cached, list):
+            return cached
+
+        endpoint = f"categories/{cat_clean}/attributes"
+        logger.info("[ML Category Attributes] Consultando API pública de atributos da categoria '%s'", cat_clean)
+
+        res = self._get_pub(endpoint)
+        if res and isinstance(res, list):
+            cache.set(cache_key, res, timeout=86400)
+            return res
+
+        return []
+
+

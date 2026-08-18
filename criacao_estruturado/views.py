@@ -10,6 +10,22 @@ from integracoes.mercadolivre import MercadoLivreClient, CATEGORIA_PADRAO_BASELI
 from .services.criador_kits_service import CriadorKitsService
 from .models.historico_kit import HistoricoKit
 
+MAX_SKUS_SECUNDARIOS_MISTO = 20
+
+
+def _normalizar_skus_secundarios(skus_raw, sku_principal: str, max_skus: int = MAX_SKUS_SECUNDARIOS_MISTO):
+    """Normaliza, elimina duplicados e aplica o limite de 20 SKUs secundários para kit misto."""
+    skus_secundarios = []
+    for sku in skus_raw or []:
+        s_clean = str(sku).strip()
+        if not s_clean or s_clean == sku_principal:
+            continue
+        if s_clean not in skus_secundarios:
+            skus_secundarios.append(s_clean)
+        if len(skus_secundarios) >= max_skus:
+            break
+    return skus_secundarios
+
 
 def _resolver_category_ml(categoria_input: str) -> Optional[str]:
     """
@@ -38,13 +54,8 @@ def painel_kits(request):
         categoria_input    = request.POST.get("categoria_ml", "").strip() or request.POST.get("url_produto_ml", "").strip() or None
         gerar_ean_unitario = request.POST.get("gerar_ean_unitario") == "on"
 
-        # Resolve, unique, and filter out empty and primary SKU
-        skus_secundarios = []
-        for s in skus_raw:
-            s_clean = s.strip()
-            if s_clean and s_clean != sku_manual and s_clean not in skus_secundarios:
-                skus_secundarios.append(s_clean)
-        skus_secundarios = skus_secundarios[:4]
+        # Resolve, unique, and filter out empty and primary SKU, respecting the 20-SKU mix cap.
+        skus_secundarios = _normalizar_skus_secundarios(skus_raw, sku_manual, max_skus=20)
         e_misto = len(skus_secundarios) > 0
 
         if acao == "confirmar_criacao":

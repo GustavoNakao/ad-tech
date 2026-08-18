@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>R831 — Gerador de Kits</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
           rel="stylesheet"
           integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
@@ -28,7 +28,8 @@
             --warn:     #ffc14d;
             --purple:   #a78bfa;
             --fh:       'Syne', sans-serif;
-            --fm:       'DM Mono', monospace;
+            --fm:       'Inter', 'Segoe UI', sans-serif;
+            --fn:       'JetBrains Mono', 'SFMono-Regular', monospace;
         }
 
         body { background:var(--bg); color:var(--text); font-family:var(--fm); font-size:13px; min-height:100vh; line-height:1.6; }
@@ -75,7 +76,7 @@
         .mi { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:13px; margin-bottom:10px; }
         .ic{background:rgba(0,200,255,.1);color:var(--cyan)} .ig{background:rgba(0,229,153,.1);color:var(--success)} .ia{background:rgba(255,193,77,.1);color:var(--warn)}
         .ml-m { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:3px; }
-        .mv { font-family:var(--fh); font-size:28px; font-weight:800; line-height:1; }
+        .mv { font-family:var(--fn); font-size:28px; font-weight:700; line-height:1; letter-spacing:-0.05em; }
         .ms { font-size:11px; color:var(--muted); margin-top:3px; }
 
         /* NOVO LAYOUT 2 COLUNAS */
@@ -359,7 +360,7 @@
                         <!-- Toggle Kit Misto -->
                         <label class="toggle-misto">
                             <input type="checkbox" id="chk-misto">
-                            <span>Kit Misto — <b>Até 5 SKUs no total</b></span>
+                            <span>Kit Misto — <b>até 20 SKUs secundários</b></span>
                         </label>
 
                         <label class="toggle-misto">
@@ -603,11 +604,11 @@ document.getElementById('chk-misto').addEventListener('change', function() {
 document.getElementById('btn-add-sku-sec').addEventListener('click', function() {
     const container = document.getElementById('container-skus-secundarios');
     const count = container.querySelectorAll('.sku-sec-input').length;
-    if (count >= 4) {
-        alert("Limite máximo de 4 SKUs secundários (5 produtos no total) atingido.");
+    if (count >= 20) {
+        alert("Limite máximo de 20 SKUs secundários para Kit Misto atingido.");
         return;
     }
-    
+
     const wrapper = document.createElement('div');
     wrapper.className = 'input-secundario-wrapper';
     wrapper.style.display = 'flex';

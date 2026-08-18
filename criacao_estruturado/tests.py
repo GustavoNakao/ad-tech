@@ -17,6 +17,7 @@ from .services.criador_kits_service import (
     CriadorKitsService,
     _is_sku_already_exists_error,
 )
+from .services.ficha_tecnica.categoria_atributos_service import CategoriaAtributosMLService
 
 
 class GetNextKitSkuTests(TestCase):
@@ -92,6 +93,47 @@ class SkuConflictDetectionTests(TestCase):
         self.assertTrue(_is_sku_already_exists_error(Exception("Duplicate SKU")))
         self.assertTrue(_is_sku_already_exists_error(Exception("já existe")))
         self.assertFalse(_is_sku_already_exists_error(Exception("Network error")))
+
+    def test_normaliza_skus_secundarios_respeita_limite_de_20(self):
+        from criacao_estruturado.views import _normalizar_skus_secundarios
+
+        skus = [f"30{i}" for i in range(1, 25)]
+        skus = [" 301 ", "302", "301", "303", "304", "305", "306", "307", "308", "309", "310", "311", "312", "313", "314", "315", "316", "317", "318", "319", "320", "321", "322", "323"]
+        self.assertEqual(
+            _normalizar_skus_secundarios(skus, "300"),
+            ["301", "302", "303", "304", "305", "306", "307", "308", "309", "310", "311", "312", "313", "314", "315", "316", "317", "318", "319", "320"],
+        )
+
+
+class CategoriaAtributosMLServiceTests(TestCase):
+    """Testa o fluxo de resolução de categoria + schema enxuto da IA."""
+
+    @patch("criacao_estruturado.services.ficha_tecnica.categoria_atributos_service.MercadoLivreClient")
+    def test_coleta_e_consolida_atributos_relevantes_para_ia(self, mock_client_cls):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.resolver_categoria_por_input.return_value = "MLB271283"
+        mock_client.ficha_tecnica.return_value = [
+            {"id": "BRAND", "name": "Marca", "required": True, "values": [{"id": "1", "name": "Marca X"}]},
+            {"id": "GTIN", "name": "GTIN", "required": True, "values": []},
+            {"id": "COLOR", "name": "Cor", "required": False, "values": [{"id": "10", "name": "Azul"}]},
+        ]
+        mock_client.technical_specs_input.return_value = [
+            {"id": "VOLUME", "name": "Volume", "required": True},
+            {"id": "ORIGIN", "name": "Origem", "required": False},
+        ]
+
+        service = CategoriaAtributosMLService()
+        payload = service.build_payload_for_ia(
+            categoria_input="Tintas Sprays",
+            titulo_produto="Tinta spray 250 ml"
+        )
+
+        self.assertEqual(payload["category_id"], "MLB271283")
+        self.assertIn("Marca", payload["field_names"])
+        self.assertIn("Volume", payload["field_names"])
+        self.assertIn("schema_ia", payload)
+        self.assertIn("Marca", payload["schema_ia"]["properties"])
 
 
 class CriadorKitsServiceIntegrationTests(TestCase):

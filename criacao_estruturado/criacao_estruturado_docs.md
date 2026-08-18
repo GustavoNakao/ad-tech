@@ -152,27 +152,38 @@ Ao resolver a categoria do produto (seja informada via URL ou prevista automatic
 *   **Uso de Marcas de Terceiros**: Bloqueia termos de similaridade (`"tipo X"`, `"similar a"`, `"réplica"`) e obriga o formato de compatibilidade (`"compatível com X"` ou `"para X"`).
 
 ### Regras do Agente 2A — Título Unitário
-- Limite máximo de 60 caracteres (sem mínimo obrigatório e sem padding).
-- Proibido qualquer adjetivo subjetivo, promessa comercial, termo de garantia ou promessa de resultado.
-- Estrutura rígida e obrigatória: `[Tipo de Produto] [Formato / Especificação / Modelo / Compatibilidade] [Marca]`.
-- Foco em dados reais (ml, polegadas, voltagem, cor, tamanho, quantidade).
+- Meta de comprimento: DEVE buscar entre 53 e 59 caracteres para maximizar a área de busca SEO no Mercado Livre sem ultrapassar o teto rígido de 60 caracteres.
+- Proibido qualquer adjetivo subjetivo, promessa comercial, termo de garantia ou promessa de resultado (sem palavras vazias como "resistente", "original", "excelente").
+- Expansão Fática Permitida: Atributos técnicos legítimos, superfícies de aplicação (`"para Metal e Madeira"`, `"para Alvenaria"`), finalidade técnica (`"Uso Geral"`, `"para Artesanato e Reparos"`) e propriedades físicas reais (`"Secagem Rápida"`, `"Acabamento Metálico"`, `"Bivolt"`).
+- Estrutura rígida e obrigatória: `[Quantidade] [Tipo de Produto] [Especificação / Modelo / Compatibilidade / Aplicação Fática] [Marca]`.
 - 3 tentativas; na falha, aplica `ajustar_titulo()` em Python (que apenas valida espaços e trunca o teto de 60 caracteres sem cortar palavras).
 - **Resiliência contra cache corrompido:** utiliza `use_cache=(tentativa == 0)`. Se a primeira tentativa (que lê do cache) falhar nos critérios de validação, as tentativas subsequentes ignoram o cache e consultam a API em tempo real.
 
 ### Regras do Agente 2B — Grade de Títulos
-- Gera 8 títulos base neutros (sem quantidade) seguindo estritamente a estrutura descritiva acima com no máximo 55-60 caracteres.
+- Gera 8 títulos base neutros (sem quantidade) em que cada título base DEVE possuir entre 45 e 52 caracteres. Com a injeção automática do prefixo `"Kit N "` pelo sistema, os títulos finais atingem exatamente entre 53 e 58 caracteres.
+- Validação no Service: O service valida se os títulos base possuem no mínimo 42 caracteres. Títulos mais curtos forçam o retry na IA exigindo maior densidade fática.
 - Proibido qualquer termo subjetivo, comercial, promessa de saúde ou promessa de resultado.
 - Inclui campo `estrategia_seo` obrigatório antes dos títulos.
 - Fallback: usa o nome original formatado se falhar.
 - **Resiliência contra cache corrompido:** utiliza `use_cache=(tentativa == 0)`. Se a primeira tentativa (que lê do cache) falhar no parser de JSON ou nos critérios de grade, as tentativas subsequentes ignoram o cache e realizam chamadas diretas à API.
 
-### Regras do Agente 4 — Ficha Técnica
-- Usa **exatamente** os nomes dos atributos fornecidos como chaves
-- Valores de lista permitida → deve escolher um dos valores exatos
-- Atributo inferível → adiciona `(inferido)` ao valor
-- Sem dados → `"A informar"`
-- Nunca extrai `EAN`, `GTIN`, `Código de barras`
-- Padronização: cores em PT-BR, medidas com unidade, booleanos `"Sim"/"Não"`
+### Regras do Agente 4 — Ficha Técnica Inteligente (Arquitetura de 9 Passos)
+- **Princípio da Fidedignidade Absoluta (Zero Invenção / Zero Fallback Genérico):** É terminantemente proibido inventar valores, preencher suposições genéricas ou injetar `"Não informado"`. Se a informação não for comprovada pelo catálogo oficial ou texto do produto, a chave é omitida do JSON.
+- **Resolução Estrita pela Categoria do Usuário (Passo 2 do Painel):** O sistema utiliza `MercadoLivreClient.resolver_categoria_por_input(...)` para converter em < 1s a árvore de categoria colada pelo usuário (ex: `"ConstruçãoLoja das TintasTintasTintas Sprays"` ou `"MLB271283"`) no Category ID oficial do ML.
+- **Filtragem por Formulário do BaseLinker (`technical_specs/input`):** A Ficha Técnica é filtrada dinamicamente contra a especificação da categoria real, mantendo exclusivamente as chaves que possuem correspondência direta no formulário do BaseLinker e descartando atributos sobressalentes.
+- **Arquitetura de 9 Passos do Sistema de Ficha Técnica Inteligente (`FichaTecnicaOrchestrator`):**
+  1. **Resolução de Categoria**: Converte o input da árvore no ID oficial do ML (`MLB271283`).
+  2. **Coleta de Formulário**: Carrega `technical_specs/input` da categoria para definir `chaves_permitidas`.
+  3. **EvidenceCollector (Hierarquia Factual de Fontes)**: Coleta evidências e atribui prioridades: Catálogo Oficial ML (100) > Fabricante Oficial (95) > Banco Interno ERP (90) > Dados do Produto (75) > Descrição SEO (50).
+  4. **Agente 4 Extrator Factual (Groq `openai/gpt-oss-120b` / `llama-3.3-70b-versatile`)**: Chamada com Structured Outputs (`strict: true`) extraindo apenas campos comprovados sem inventar.
+  5. **FichaTecnicaNormalizer**: Padronização de unidades `mL` (capital L) e `g`, tradução de sinônimos (`Volume da unidade` $\to$ `Volume líquido`) e expurgo de chaves fora do formulário.
+  6. **FichaTecnicaValidator 1 (Python)**: Validação determinística de tipos, obrigatoriedade e integridade fática de kits (Format de venda, Quantidade, Unidades por kit, Tipo de unidade = Unidade).
+  7. **ConflictDetector**: Compara evidências entre fontes e desfaz contradições adotando a fonte de maior prioridade.
+  8. **Agente 7 Auditor Factual (Google Gemini `gemini-2.5-flash` / `gemini-3.6-flash`)**: Audita 100% das fichas técnicas geradas atributo por atributo.
+  9. **Decisão de Publicação & Persistência PostgreSQL**: Salva a trilha auditável nas tabelas `FichaExecucao`, `FichaAtributo`, `FichaEvidencia`, `FichaAuditoria`, `FichaConflito` e retorna a Ficha Técnica Aprovada.
+
+*Atualizado em 2026-08-10: Implementado o Sistema de Ficha Técnica Inteligente com Rastreabilidade por Evidências, Extrator Groq gpt-oss-120b (strict: true), Validação Determinística Python, Auditoria Factual 100% por IA Gemini e Persistência no PostgreSQL.*
+
 
 ### Regras do Agente 5 — Keywords
 - Categorias: Termos Primários, Secundários, de Kit, Alternativos
@@ -687,11 +698,19 @@ sequenceDiagram
 ### Atualizado em 2026-07-20
 - **Suporte a `skus_secundarios` no `CriadorKitsService.executar_criacao_grade`**: Adicionado o parâmetro `skus_secundarios: Optional[List[str]] = None` à assinatura da função `executar_criacao_grade`. A view `painel_kits` agora envia a lista de SKUs secundários sem disparar `TypeError`, e a service consolida todos os SKUs informados para calcular custos agregados, pesos combinados e a estrutura de produtos vinculados (bundle) no BaseLinker.
 - **Remoção de Consultas ao Modelo Obsoleto `NcmGpc` no Fluxo GS1**: Removidas chamadas ORM ao modelo descontinuado `NcmGpc` em `_obter_ean_kit()`, eliminando o erro de banco de dados `relação "criacao_estruturado_ncmgpc" não existe` e reestabelecendo a emissão oficial de GTINs/EANs na API da GS1 Brasil.
-- **Obrigatoriedade e Resolução Manual da Árvore de Categoria do Mercado Livre**: Eliminada a predição/adivinhação automática de categorias baseada em títulos (`predict_categoria`). O formulário do painel agora exige obrigatoriamente o preenchimento manual da categoria (`categoria_ml`). O método `resolver_categoria_por_input()` no `MercadoLivreClient` processa automaticamente o input nos formatos:
-  1. Árvore com separadores (ex: `Casa, Móveis e Decoração / Banheiros / Sifões`);
-  2. Árvore copiada diretamente da página do ML sem espaços/separadores (ex: `Casa, Móveis e DecoraçãoBanheirosSifões`);
-  3. ID direto de categoria (ex: `MLB277472`);
-  4. URL pública do produto no Mercado Livre.
+### Atualizado em 2026-08-11
+- **Pipeline Inteligente de Ficha Técnica (`FichaTecnicaOrchestrator`)**:
+  - Implementada a arquitetura fática em 9 etapas unindo resgate no Catálogo Oficial do Mercado Livre (`Prioridade 100`), Agente 4 Groq Extrator (`openai/gpt-oss-120b`), sanitização determinística Python e Agente 7 Gemini Auditor (`gemini-2.5-flash`).
+- **Trava Fática de Segurança de Coerência de Título (`ConflictDetector`)**:
+  - Adicionada verificação que cruza a cor vinda do catálogo ML com a cor citada explicitamente no título do produto. Se a API do ML retornar uma cor divergente (ex: `Rosa-pálido` para uma tinta `Laranja`), o sistema descarta o erro do catálogo ML e corrige automaticamente para a cor real.
+- **Padronização Estrita de Unidades com Espaço (`FichaTecnicaNormalizer`)**:
+  - Garantido espaço obrigatório entre o número e a unidade de medida para volume (`350 mL`) e peso (`250 g`), impedindo formatações coladas (`350mL` ou `250g`).
+- **Mecanismos Genéricos de Ficha Técnica (Redução de Manutenção Manual)**:
+  - **API Dinâmica de Categoria ML (`MercadoLivreClient.obter_atributos_categoria_ml`)**: Consome a API pública `GET /categories/{id}/attributes` com cache de 24h para obter valores canônicos oficiais e tags sem listas manuais no código.
+  - **Detecção Dinâmica de Atributos de Variação (`ConflictDetector.obter_atributos_de_variacao`)**: Identifica automaticamente por categoria quais atributos variam entre itens (`allow_variations`, `variation_attribute`), priorizando a evidência do Título/Descrição sobre o catálogo geral.
+  - **Auditoria do Agente 7 com Priorização de Variação (`FichaTecnicaAuditor`)**: Prompt atualizado para impedir que a auditoria reverta variações reais do produto (ex: `Bege`) para valores genéricos de catálogo (ex: `Rosa-pálido`).
+  - **Rede de Segurança Estrutural (`FichaTecnicaNormalizer.parece_corrompido`)**: Validador estrutural de texto sem listas de frases, identificando pontuações grudadas, resíduos e espaços anormais.
+  - **Regra de Omissão Estrita (Zero Incerteza)**: Qualquer atributo que não tenha 100% de confirmação fática ou que apresente texto suspeito é **omitido** antes da publicação no BaseLinker.
 
 
 
