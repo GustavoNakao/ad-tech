@@ -664,6 +664,7 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
         e_misto: bool = False,
         atributos_obrigatorios: Optional[List[str]] = None,
         gera_grade: bool = False,
+        category_id_ml: Optional[str] = None,
     ) -> Dict:
         import json
         import re
@@ -1287,11 +1288,11 @@ class CriadorKitsService:
         self._mapa_tags_cache: Optional[Dict[str, int]] = None
         self._mapa_fabricantes_cache: Optional[Dict[int, str]] = None
 
-    def _selecionar_dimensoes_embalagem(self, dados: Dict, quantidade: int) -> Dict[str, float]:
+    def _selecionar_dimensoes_embalagem(self, dados: Dict, quantidade: int) -> Dict[str, int]:
         """
         Seleciona uma embalagem compatível para um kit com base nas dimensões da unidade.
         Para kits com mais de uma unidade, retorna as dimensões da embalagem que comporta
-        a quantidade total. Para unidades simples, mantém as dimensões originais.
+        a quantidade total. Para unidades simples, mantém as dimensões originais (arredondadas para inteiro).
         """
         try:
             altura = float(dados.get("height") or 0)
@@ -1300,8 +1301,15 @@ class CriadorKitsService:
         except (TypeError, ValueError):
             return {"height": 0, "width": 0, "length": 0}
 
+        def _arredondar(v: float) -> int:
+            return int(round(float(v))) if v else 0
+
         if quantidade <= 1 or altura <= 0 or largura <= 0 or comprimento <= 0:
-            return {"height": altura, "width": largura, "length": comprimento}
+            return {
+                "height": _arredondar(altura),
+                "width":  _arredondar(largura),
+                "length": _arredondar(comprimento),
+            }
 
         dimensoes_unidade = sorted([altura, largura, comprimento], reverse=True)
 
@@ -1354,10 +1362,18 @@ class CriadorKitsService:
                     candidatos.append((volume, (saco[0], saco[1], 5)))
 
         if not candidatos:
-            return {"height": altura, "width": largura, "length": comprimento}
+            return {
+                "height": _arredondar(altura),
+                "width":  _arredondar(largura),
+                "length": _arredondar(comprimento),
+            }
 
         _, melhor = min(candidatos, key=lambda item: item[0])
-        return {"height": melhor[2], "width": melhor[0], "length": melhor[1]}
+        return {
+            "height": _arredondar(melhor[2]),
+            "width":  _arredondar(melhor[0]),
+            "length": _arredondar(melhor[1]),
+        }
 
     def _get_mapa_tags(self) -> Dict[str, int]:
         if self._mapa_tags_cache is None:
@@ -1531,6 +1547,7 @@ class CriadorKitsService:
         conteudo = self.seo.gerar_conteudo(
             nome_original, descricao_original, features, e_misto=e_misto,
             atributos_obrigatorios=lista_obrigatorios_nomes,
+            category_id_ml=category_id_ml,
         )
 
         atribs_ia = conteudo.get("atributos") or {}
@@ -1670,9 +1687,9 @@ class CriadorKitsService:
             "price_brutto":    preco,
             "prices":          self._montar_prices_dict(preco),
             "weight":          (float(dados.get("weight") or 0) + float((dados_secundario or {}).get("weight") or 0)),
-            "height":          dados.get("height", 0),
-            "width":           dados.get("width", 0),
-            "length":          dados.get("length", 0),
+            "height":          int(round(float(dados.get("height", 0) or 0))),
+            "width":           int(round(float(dados.get("width", 0) or 0))),
+            "length":          int(round(float(dados.get("length", 0) or 0))),
             "tags":            tags_enviar,
             "images":          imagens,
             "is_bundle":       1,
@@ -2072,6 +2089,7 @@ class CriadorKitsService:
             e_misto=bool(dados_secundario),
             atributos_obrigatorios=lista_obrigatorios,
             gera_grade=True,
+            category_id_ml=category_id_ml,
         )
 
         titulos_grade = conteudo_base.get("titulos_grade", {})
@@ -2226,9 +2244,9 @@ class CriadorKitsService:
                 "price_brutto":    anuncio.preco_vitrine,
                 "prices":          {"53516": anuncio.preco_vitrine},
                 "weight":          (float(dados.get("weight") or 0) + sum(float(d.get("weight") or 0) for d in dados_secundarios)) * anuncio.quantidade,
-                "height":          dimensoes_embalagem.get("height", 0),
-                "width":           dimensoes_embalagem.get("width", 0),
-                "length":          dimensoes_embalagem.get("length", 0),
+                "height":          int(round(float(dimensoes_embalagem.get("height", 0) or 0))),
+                "width":           int(round(float(dimensoes_embalagem.get("width", 0) or 0))),
+                "length":          int(round(float(dimensoes_embalagem.get("length", 0) or 0))),
                 "tags":            tags_enviar,
                 "images":          self._extrair_imagens(dados),
                 "is_bundle":       1,
@@ -2367,6 +2385,7 @@ class CriadorKitsService:
                 e_misto=bool(dados_secundario),
                 atributos_obrigatorios=lista_obrigatorios,
                 gera_grade=False,
+                category_id_ml=category_id_ml,
             )
         except Exception as exc:
             return {"sucesso": False, "msg": f"Erro crítico na geração de conteúdo pela IA: {exc}"}

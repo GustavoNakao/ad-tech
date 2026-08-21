@@ -712,6 +712,8 @@ sequenceDiagram
   - **Rede de Segurança Estrutural (`FichaTecnicaNormalizer.parece_corrompido`)**: Validador estrutural de texto sem listas de frases, identificando pontuações grudadas, resíduos e espaços anormais.
   - **Regra de Omissão Estrita (Zero Incerteza)**: Qualquer atributo que não tenha 100% de confirmação fática ou que apresente texto suspeito é **omitido** antes da publicação no BaseLinker.
 
-
-
-
+### Atualizado em 2026-08-21
+- **Padronização e Arredondamento Obrigatório de Dimensões para Inteiros (`CriadorKitsService`)**:
+  - Garantido que as dimensões físicas (`height`, `width`, `length`) enviadas para a API do BaseLinker (`addInventoryProduct`) sejam sempre números inteiros arredondados (`int(round(float(v)))`).
+  - Previne que produtos de catálogo cadastrados originalmente com medidas decimais (ex: largura `8.14 cm`) propaguem números decimais para o painel do BaseLinker e marketplaces.
+  - O método `_selecionar_dimensoes_embalagem` e a montagem de payload em `executar_criacao_grade` e `_montar_payload` foram blindados com conversão estrita para inteiros.
