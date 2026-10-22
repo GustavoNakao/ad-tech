@@ -12,6 +12,42 @@ from typing import Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
+def is_unidades_por_kit_attribute(nome_campo: str, attr_id: str = "") -> bool:
+    """
+    Identifica de forma dinâmica se um atributo da ficha técnica do Mercado Livre
+    corresponde a 'UNITS_PER_PACK' (Unidades por kit / Embalagem / Quantidade de itens do pacote),
+    independentemente do nome customizado da categoria (ex: 'Quantidade de selantes e silicones',
+    'Quantidade de frascos', 'Quantidade de peças', 'Unidades por embalagem', etc.).
+    """
+    if not nome_campo:
+        return False
+
+    aid = str(attr_id).strip().upper()
+    if aid in ("UNITS_PER_PACK", "PACKAGE_UNITS", "UNITS_PER_PACKAGE", "SALE_UNITS", "UNITS_PER_CONTAINER"):
+        return True
+
+    n = str(nome_campo).strip().lower()
+
+    # Expressões exatas ou parciais comuns de unidades por kit
+    termos_diretos = [
+        "unidades por kit", "unidades por embalagem", "unidades por pacote",
+        "unidades por caixa", "unidades por container", "quantidade por kit",
+        "quantidade por embalagem", "quantidade de peças", "quantidade de unidades",
+        "unidades por kit / embalagem"
+    ]
+    if any(t in n for t in termos_diretos):
+        return True
+
+    # Padrão dinâmico da API do Mercado Livre para categorias específicas: "quantidade de [produto/item]"
+    # Ex: "quantidade de selantes e silicones", "quantidade de frascos", "quantidade de bisnagas", "quantidade de latas"
+    if n.startswith("quantidade de "):
+        excecoes = ["peso", "volume", "portas", "gavetas", "meses", "dias", "anos", "garantia", "ml", "gramas", "kg", "comprimento", "largura", "altura"]
+        if not any(exc in n for exc in excecoes):
+            return True
+
+    return False
+
+
 class FichaTecnicaValidator:
     """
     Validador Determinístico em código Python.
@@ -19,11 +55,16 @@ class FichaTecnicaValidator:
     """
 
     @staticmethod
-    def resolver_atributos_fisicos_kit(features: Dict[str, str], quantidade: int = 1) -> Dict[str, str]:
+    def resolver_atributos_fisicos_kit(
+        features: Dict[str, str],
+        quantidade: int = 1,
+        atributos_obrigatorios: Optional[List[str]] = None
+    ) -> Dict[str, str]:
         """
         Garante a integridade fática de kits e unidades de forma matemática:
         - Se quantidade > 1: Formato de venda = 'Kit', Quantidade = N, Unidades por kit = N
         - Se quantidade == 1: Formato de venda = 'Unidade', Quantidade = 1, Unidades por kit = 1
+        - Mapeia dinamicamente atributos customizados de UNITS_PER_PACK por categoria (ex: Quantidade de selantes e silicones)
         - Condição do item = 'Novo'
         - Tipo de unidade = 'Unidade'
         - Unidade de venda = 'Unidade'
@@ -44,7 +85,7 @@ class FichaTecnicaValidator:
             if k_lower in ("quantidade", "quantidade ", "quantidade de peças", "quantidade de unidades"):
                 novas_features[k] = qtd_str
 
-            if k_lower in ("unidades por kit", "unidades por embalagem"):
+            if is_unidades_por_kit_attribute(k):
                 novas_features[k] = qtd_str
 
             if k_lower in ("tipo de unidade", "unidade de venda"):
@@ -52,6 +93,13 @@ class FichaTecnicaValidator:
 
             if k_lower in ("condição do item", "item_condition"):
                 novas_features[k] = "Novo"
+
+        # Garante que atributos obrigatórios especificamente nomeados pela categoria (ex: 'Quantidade de selantes e silicones') recebam o valor da quantidade
+        if atributos_obrigatorios:
+            for attr in atributos_obrigatorios:
+                nome_attr = attr.split(" [")[0].strip()
+                if is_unidades_por_kit_attribute(nome_attr):
+                    novas_features[nome_attr] = qtd_str
 
         novas_features["Formato de venda"] = fmt_venda
         novas_features["Unidades por kit"] = qtd_str

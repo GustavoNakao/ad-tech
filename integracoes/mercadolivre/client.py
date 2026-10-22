@@ -557,14 +557,14 @@ class MercadoLivreClient:
         return fallback_id
 
     @staticmethod
-    def _remover_acentos_norm(txt: str) -> str:
-        """Remove acentos e pontuações para comparação insensível a acentuação."""
+    def _remover_acentos_norm_com_espacos(txt: str) -> str:
+        """Remove acentos e pontuações preservando espaços para tokenização."""
         if not txt:
             return ""
         import unicodedata
         nfkd = unicodedata.normalize("NFKD", txt)
         ascii_txt = nfkd.encode("ASCII", "ignore").decode("ASCII")
-        return re.sub(r'[^a-z0-9]', '', ascii_txt.lower())
+        return re.sub(r'[^a-z0-9\s]', ' ', ascii_txt.lower())
 
     def resolver_categoria_por_input(self, entrada: str) -> Optional[str]:
         """
@@ -601,8 +601,9 @@ class MercadoLivreClient:
         query_limpa = re.sub(r'[/><,;\-]', ' ', texto_separado)
         query_limpa = re.sub(r'\s+', ' ', query_limpa).strip()
 
-        # Remove acentos e caracteres especiais para comparação exata de caminhos
-        texto_norm = self._remover_acentos_norm(texto)
+        # Tokens do texto informado pelo usuário
+        palavras_input = [w for w in self._remover_acentos_norm_com_espacos(texto_separado).split() if len(w) >= 3]
+        set_tokens_input = set(palavras_input)
 
         logger.info("Resolver Categoria por árvore: texto original='%s' | query='%s'", texto[:60], query_limpa[:60])
 
@@ -637,7 +638,7 @@ class MercadoLivreClient:
             return None
 
         melhor_cat_id = None
-        melhor_score = -1
+        melhor_score = -1.0
 
         for item in candidates:
             cand_id = item.get("category_id")
@@ -652,28 +653,34 @@ class MercadoLivreClient:
             path_str = det.get("path", "")
             niveis = [n.strip() for n in path_str.split(">") if n.strip()]
 
-            score = 0
-            for nivel in niveis:
-                nivel_norm = self._remover_acentos_norm(nivel)
-                if nivel_norm and len(nivel_norm) >= 3 and nivel_norm in texto_norm:
-                    score += 1
+            # 1. Contagem de tokens que coincidem entre o caminho da categoria e o texto informado pelo usuário
+            path_tokens = set(w for w in self._remover_acentos_norm_com_espacos(path_str).split() if len(w) >= 3)
+            token_overlap = len(path_tokens.intersection(set_tokens_input))
 
-            logger.debug("Candidata %s ('%s') -> score=%d/%d", cand_id, path_str, score, len(niveis))
+            score = float(token_overlap)
+
+            # 2. Bônus para folha (sem subcategorias filhas)
+            if not det.get("children_categories"):
+                score += 3.0
+
+            # 3. Bônus se o nome da folha contiver termos finais do input do usuário
+            if niveis:
+                folha_norm = self._remover_acentos_norm_com_espacos(niveis[-1])
+                ultimas = palavras_input[-2:] if len(palavras_input) >= 2 else palavras_input
+                if any(p in folha_norm for p in ultimas):
+                    score += 5.0
+
+            logger.debug("Candidata %s ('%s') -> score=%.1f", cand_id, path_str, score)
 
             if score > melhor_score:
                 melhor_score = score
                 melhor_cat_id = cand_id
 
         if melhor_cat_id and melhor_score > 0:
-            logger.info("Resolver Categoria por árvore: ✅ Resolvido → %s (score=%d)", melhor_cat_id, melhor_score)
+            logger.info("Resolver Categoria por árvore: ✅ Resolvido → %s (score=%.1f)", melhor_cat_id, melhor_score)
             return melhor_cat_id
 
-        # Fallback para a primeira candidata se nenhuma pontuou
-        primeiro_id = candidates[0].get("category_id")
-        if primeiro_id:
-            logger.info("Resolver Categoria por árvore: Fallback primeira opção → %s", primeiro_id)
-            return primeiro_id
-
+        logger.warning("Resolver Categoria por árvore: ❌ Nenhuma candidata confiável para '%s'", texto[:60])
         return None
 
     # =========================================================================

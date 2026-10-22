@@ -3,6 +3,12 @@ integracoes/groq/client.py
 
 Client do Groq para modelos Llama com alta velocidade.
 Suporta rotação de chaves e tratamento de rate limits.
+
+Atualizações:
+- 2026-09-16: llama-3.1-8b-instant deprecado pela Groq (16/08/2026).
+  Substituído por llama-3.2-3b-preview para SEO/TECH.
+- 2026-09-16: Adicionado close_old_connections() para evitar
+  InterfaceError após chamadas longas à Groq que fecham a conexão DB.
 """
 from __future__ import annotations
 
@@ -14,6 +20,7 @@ from typing import Any, Dict, List, Optional
 import requests
 from decouple import config
 from django.core.cache import cache
+from django.db import close_old_connections
 
 logger = logging.getLogger(__name__)
 
@@ -64,16 +71,17 @@ def _get_pool() -> _KeyPool:
 
 class GroqClient:
     BASE_URL = "https://api.groq.com/openai/v1"
-    
-    # Modelos conforme plano do usuário
-    MODELO_SEO   = "llama-3.1-8b-instant"
-    MODELO_COPY  = "llama-3.3-70b-versatile"
-    MODELO_TECH  = "llama-3.1-8b-instant"
+
+    # Modelos ativos na Groq (atualizado 2026-09-16)
+    # llama-3.1-8b-instant foi deprecado em 16/08/2026
+    MODELO_SEO   = "llama-3.2-3b-preview"     # leve/rápido para SEO
+    MODELO_COPY  = "llama-3.3-70b-versatile"  # robusto para copywriting
+    MODELO_TECH  = "llama-3.2-3b-preview"     # leve/rápido para atributos técnicos
 
     TIMEOUT = 30
     MAX_TENTATIVAS = 5
 
-    def chat(self, system_prompt: str, user_input: str, modelo: str = "llama-3.1-8b-instant", temperature: float = 0.0) -> Optional[str]:
+    def chat(self, system_prompt: str, user_input: str, modelo: str = "llama-3.2-3b-preview", temperature: float = 0.0) -> Optional[str]:
         pool = _get_pool()
         for tentativa in range(self.MAX_TENTATIVAS):
             try:
@@ -107,13 +115,20 @@ class GroqClient:
                 data = resp.json()
                 duration = time.time() - start_time
                 logger.info(f"✅ Groq: Sucesso em {duration:.2f}s.")
+                # Força o Django a reabrir conexões DB que possam ter
+                # sido fechadas durante a chamada bloqueante à Groq.
+                close_old_connections()
                 return data["choices"][0]["message"]["content"]
-                
+
             except GroqRateLimitError:
                 logger.error("Groq: Rate limit total.")
+                close_old_connections()
                 return None
             except Exception as exc:
                 logger.error(f"Groq Erro: {exc}")
-                if tentativa == self.MAX_TENTATIVAS - 1: return None
+                if tentativa == self.MAX_TENTATIVAS - 1:
+                    close_old_connections()
+                    return None
                 time.sleep(1)
+        close_old_connections()
         return None

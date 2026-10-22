@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 from decimal import Decimal
 
 from django.db import connection
+from django.db.models import Q
 from django.conf import settings
 from decouple import config
 
@@ -16,6 +17,7 @@ from integracoes.baselinker.client import BaselinkerClient
 from integracoes.mercadolivre.client import MercadoLivreClient
 from integracoes.gs1.client import get_gs1_client
 from integracoes.gemini import GeminiClient
+from integracoes.gemini.client import baixar_imagem_para_base64
 from integracoes.groq import GroqClient
 
 from ..models.historico_kit import HistoricoKit
@@ -24,6 +26,8 @@ from ..models.numero_reciclado import NumeroReciclado
 from precificacao.services.calculadora import Calculadora
 from precificacao.models import RegrasPrecificacao
 from categorias.models.termos_proibidos import TermosProibidos
+
+from .ficha_tecnica.validator import is_unidades_por_kit_attribute
 
 logger = logging.getLogger("gerador_kits")
 
@@ -114,11 +118,28 @@ def normalizar_texto_validador(texto: str) -> str:
     return " ".join(texto_sem_acentos.split())
 
 
-# Versões normalizadas das seções para comparação resiliente
+def _limpar_travessoes(texto: str) -> str:
+    """Remove travessões (—, –, --) substituindo por dois-pontos ou hífens para leitura limpa."""
+    if not texto:
+        return ""
+    res = texto.replace(" — ", ": ").replace("—", ": ")
+    res = res.replace(" – ", ": ").replace("–", ": ")
+    res = res.replace(" -- ", ": ")
+    return res
+
+
+SECOES_OBRIGATORIAS = [
+    "SOBRE O PRODUTO",
+    "PRINCIPAIS CARACTERÍSTICAS",
+    "BENEFÍCIOS",
+    "DÚVIDAS FREQUENTES",
+    "IDEAL PARA",
+]
+
 SECOES_OBRIGATORIAS_NORM = {
     "SOBRE O PRODUTO": "sobre o produto",
+    "PRINCIPAIS CARACTERÍSTICAS": "principais caracteristicas",
     "BENEFÍCIOS": "beneficios",
-    "DIFERENCIAIS DO PRODUTO": "diferenciais do produto",
     "DÚVIDAS FREQUENTES": "duvidas frequentes",
     "IDEAL PARA": "ideal para",
 }
@@ -136,24 +157,97 @@ def _is_sku_already_exists_error(exc: Exception) -> bool:
 
 
 def validar_descricao(desc: str) -> bool:
-    """Verifica se todas as seções obrigatórias estão presentes na descrição de forma robusta e flexível."""
+    """Verifica se todas as seções fundamentais estão presentes na descrição."""
     desc_norm = normalizar_texto_validador(desc)
-    return all(norm_val in desc_norm for norm_val in SECOES_OBRIGATORIAS_NORM.values())
+    tem_sobre = "sobre o produto" in desc_norm or len(desc_norm.split()) > 8
+    tem_caract = any(k in desc_norm for k in ("principais caracteristicas", "caracteristicas", "diferenciais"))
+    tem_benef = "beneficios" in desc_norm
+    tem_duvidas = any(k in desc_norm for k in ("duvidas frequentes", "duvidas", "perguntas frequentes", "faq"))
+    tem_ideal = any(k in desc_norm for k in ("ideal para", "indicado para", "recomendado para"))
+    return all([tem_sobre, tem_caract, tem_benef, tem_duvidas, tem_ideal])
 
 
 def normalizar_descricao(desc: str) -> str:
-    """
-    Garante que a descrição sempre comece pela seção correta,
-    removendo qualquer lixo antes de 'SOBRE O PRODUTO'.
-    Suporta variações de caixa e marcas de markdown.
-    """
-    desc_strip = desc.strip()
-    # Procura 'SOBRE O PRODUTO' de forma case-insensitive e flexível em relação a markdown/espaços/pontuações
+    """Garante que a descrição comece pelo conteúdo principal, sem lixo antes do início."""
+    desc_strip = _limpar_travessoes(desc.strip())
     match = re.search(r'(?:[#*]*\s*)?(sobre\s+o\s+produto)(?:\s*[#*:]*)?', desc_strip, re.IGNORECASE)
     if match:
         idx = match.start()
         return desc_strip[idx:].strip()
     return desc_strip
+
+
+def _ajustar_linha_item(linha: str, quantidade: int) -> str:
+    """Ajusta o multiplicador de quantidade de uma linha de item do kit."""
+    linha_limpa = linha.strip()
+    if not linha_limpa:
+        return linha
+
+    match_marcador = re.match(r"^([\-\*\•]\s*|\d+[\.\)]\s*)", linha_limpa)
+    marcador = match_marcador.group(1) if match_marcador else "• "
+    conteudo = linha_limpa[len(marcador):].strip()
+
+    if re.match(r"^\d+\s*[xX]\s+", conteudo):
+        conteudo = re.sub(r"^\d+\s*[xX]\s+", "", conteudo).strip()
+    elif re.search(r"\s+[xX]\s*\d+(?:\s+unidades?)?\s*$", conteudo, flags=re.IGNORECASE):
+        conteudo = re.sub(r"\s+[xX]\s*\d+(?:\s+unidades?)?\s*$", "", conteudo, flags=re.IGNORECASE).strip()
+    elif re.search(r"[\-\(]\s*\d+\s+unidades?\s*\)?\s*$", conteudo, flags=re.IGNORECASE):
+        conteudo = re.sub(r"[\-\(]\s*\d+\s+unidades?\s*\)?\s*$", "", conteudo, flags=re.IGNORECASE).strip(" -(")
+    elif re.search(r"\s+\d+\s+unidades?\s*$", conteudo, flags=re.IGNORECASE):
+        conteudo = re.sub(r"\s+\d+\s+unidades?\s*$", "", conteudo, flags=re.IGNORECASE).strip()
+
+    return f"{marcador}{conteudo} x {quantidade}"
+
+
+def _injetar_secao_kit(texto: str, quantidade: int, nome_produto: str, nomes_secundarios: Optional[List[str]]) -> str:
+    """Constrói e injeta a seção CONTEÚDO DA COMPRA caso ela não exista no texto."""
+    prod_nome = nome_produto or "Produto"
+    itens = [f"• {prod_nome} x {quantidade}"]
+    for n_sec in (nomes_secundarios or []):
+        if n_sec:
+            itens.append(f"• {n_sec} x {quantidade}")
+
+    bloco_kit = "CONTEÚDO DA COMPRA\n\n" + "\n".join(itens)
+    if "IDEAL PARA" in texto:
+        partes = re.split(r"(\bIDEAL PARA\b)", texto, maxsplit=1, flags=re.IGNORECASE)
+        return f"{partes[0].strip()}\n\n{bloco_kit}\n\n{partes[1]}{partes[2]}"
+    return f"{texto}\n\n{bloco_kit}"
+
+
+def ajustar_descricao_quantidade(
+    descricao: str,
+    quantidade: int,
+    nome_produto: str = "",
+    nomes_secundarios: Optional[List[str]] = None,
+) -> str:
+    """Ajusta as quantidades dos itens na seção CONTEÚDO DA COMPRA ou O QUE VEM NO KIT."""
+    if not descricao or quantidade < 1:
+        return descricao or ""
+
+    linhas, linhas_novas, em_secao, secao_encontrada = descricao.splitlines(), [], False, False
+    re_kit = re.compile(
+        r"^(?:[#*]*\s*)?(CONTE[ÚU]DO DA COMPRA|O QUE VEM NO KIT|ITENS INCLUSOS|CONTE[ÚU]DO DO PACOTE)(?:\s*[#*:]*)?$",
+        re.I
+    )
+    re_outro = re.compile(
+        r"^(?:[#*]*\s*)?(SOBRE O PRODUTO|PRINCIPAIS CARACTER[ÍI]STICAS|BENEF[ÍI]CIOS|MODO DE USO|DIFERENCIAIS|D[ÚU]VIDAS FREQUENTES|IDEAL PARA)(?:\s*[#*:]*)?$",
+        re.I
+    )
+
+    for l in linhas:
+        l_strip = l.strip()
+        if re_kit.match(l_strip):
+            em_secao, secao_encontrada = True, True
+        elif em_secao and re_outro.match(l_strip):
+            em_secao = False
+
+        if em_secao and (l_strip.startswith(("-", "*", "•")) or re.match(r"^\d+[\.\)]", l_strip)):
+            linhas_novas.append(_ajustar_linha_item(l, quantidade))
+        else:
+            linhas_novas.append(l)
+
+    res = "\n".join(linhas_novas).strip()
+    return res if secao_encontrada else _injetar_secao_kit(res, quantidade, nome_produto, nomes_secundarios)
 
 
 # =============================================================================
@@ -558,89 +652,75 @@ Responda EXCLUSIVAMENTE em JSON, sem texto adicional, sem markdown:
 }"""
 
     # -------------------------------------------------------------------------
-    # AGENTE 6 — COPYWRITER / DESCRIÇÃO (Groq, temperatura 0.0)
-    #
-    # MUDANÇA PRINCIPAL: O template de seções é FIXO com marcadores exatos.
-    # A IA preenche o conteúdo entre os marcadores — nunca altera os cabeçalhos.
+    # AGENTE 6 — COPYWRITER / DESCRIÇÃO (Gemini 2.5 Flash)
     # -------------------------------------------------------------------------
-    PROMPT_COPY = """Você é um Copywriter Profissional de E-commerce especialista em conversão no Mercado Livre Brasil.
-Sua tarefa é criar uma descrição persuasiva, técnica e otimizada para o produto fornecido.
+    PROMPT_COPY = """Você é um Copywriter Profissional de E-commerce de Alto Nível especialista em conversão no Mercado Livre Brasil.
+Sua missão é criar uma descrição clara, altamente escaneável no celular, técnica e persuasiva para o produto fornecido.
 
 ====================================
-ANÁLISE PRÉVIA OBRIGATÓRIA DO PRODUTO
+DIRETRIZES FUNDAMENTAIS (LEITURA RÁPIDA E CONVERSÃO)
 ====================================
-Antes de escrever qualquer linha, analise o produto fornecido e extraia internamente:
-
-A) PROBLEMA CENTRAL — qual dor, necessidade ou desejo o produto resolve?
-B) PÚBLICO-ALVO — quem compra esse produto e em que situação?
-C) DIFERENCIAIS REAIS — o que torna esse produto diferente dos concorrentes genéricos?
-D) CONDIÇÕES DE USO — onde, como e quando o produto é utilizado?
-E) OBJEÇÕES COMUNS — quais dúvidas ou medos o comprador típico teria antes de comprar?
-
-Essa análise deve guiar todo o texto. Nunca escreva de forma genérica.
+1. SOBRE O PRODUTO DEVE SER ENXUTO: No máximo 2 parágrafos curtos (3 a 5 linhas cada). Vá direto ao ponto, sem enrolação ou textos longos que cansem o leitor.
+2. PROIBIÇÃO ABSOLUTA DE TRAVESSÕES (—, –, --): NUNCA use travessões em nenhuma parte do texto. Use dois-pontos (:), hífen simples (-) ou marcadores com bolinha (•).
+3. USE DADOS REAIS: Integre as dimensões exatas, materiais, composição e características extraídas das imagens da embalagem ou catálogo.
+4. MODO DE USO: Apresente um passo a passo numerado, prático e objetivo quando aplicável ao produto.
+5. DÚVIDAS FREQUENTES: Traga 3 perguntas reais numeradas com respostas curtas e objetivas que eliminam dúvidas de compra.
+6. CONTEÚDO DA COMPRA: Liste exatamente o que acompanha a compra (ex: • 1x [Nome do Produto com especificação] ou • Kit com [Qtd]x [Nome]).
+7. REGRA DE QUANTIDADES: Sempre que precisar preencher quantidade de itens (em CONTEÚDO DA COMPRA ou Ficha Técnica), consulte obrigatoriamente o campo responsável de quantidade (`quantidade`, `qtd_kit`, `unidades_por_kit`). NUNCA insira '1 unidade' como valor padrão genérico.
 
 ====================================
-TEMPLATE OBRIGATÓRIO (preencha EXATAMENTE nesta estrutura)
+TEMPLATE OBRIGATÓRIO (Mantenha EXATAMENTE esta estrutura de cabeçalhos)
 ====================================
-Você DEVE retornar o texto usando EXATAMENTE os cabeçalhos abaixo, na mesma ordem, sem alterar nenhum deles:
-
 SOBRE O PRODUTO
-[Parágrafo de abertura com gancho emocional ou situacional. Apresente o produto pelo nome completo e posicione-o como a solução ideal.]
+[Parágrafo 1 curto: Apresente o produto e sua principal função e praticidade de forma direta.]
 
-[Parágrafo de descrição técnica humanizada. Explique como o produto funciona, conectando características a benefícios reais.]
+[Parágrafo 2 curto: Destaque o acabamento, material ou tecnologia e onde pode ser utilizado.]
 
-[Parágrafo de diferencial competitivo. Compare indiretamente com alternativas inferiores, sem citar concorrentes.]
-
-[Parágrafo de contexto de uso expandido. Amplie os cenários de aplicação além do óbvio.]
+PRINCIPAIS CARACTERÍSTICAS
+• [Formato / Modelo]
+• [Cor / Acabamento]
+• [Dimensões / Medidas exatas]
+• [Material / Composição]
+• [Outras especificações técnicas comprovadas]
 
 BENEFÍCIOS
-- [Verbo de ação + resultado concreto]
-- [Verbo de ação + resultado concreto]
-- [Verbo de ação + resultado concreto]
-- [Verbo de ação + resultado concreto]
-- [Verbo de ação + resultado concreto]
-- [Verbo de ação + resultado concreto]
+• [Verbo de ação no presente + resultado prático]
+• [Verbo de ação no presente + resultado prático]
+• [Verbo de ação no presente + resultado prático]
+• [Verbo de ação no presente + resultado prático]
 
-DIFERENCIAIS DO PRODUTO
-- [Característica técnica] — [por que isso importa para o comprador]
-- [Característica técnica] — [por que isso importa para o comprador]
-- [Característica técnica] — [por que isso importa para o comprador]
-- [Característica técnica] — [por que isso importa para o comprador]
-- [Característica técnica] — [por que isso importa para o comprador]
+MODO DE USO
+1. [Passo 1 de aplicação ou uso]
+2. [Passo 2 de aplicação ou uso]
+3. [Passo 3 de aplicação ou uso]
+
+CONTEÚDO DA COMPRA
+• 1x [Nome do Produto com especificação principal]
 
 DÚVIDAS FREQUENTES
-P: [Pergunta direta como o comprador faria]
-R: [Resposta curta, confiante e que elimine a dúvida completamente]
+1. [Pergunta comum de comprador?]
+R: [Resposta curta, direta e confiante]
 
-P: [Pergunta direta como o comprador faria]
-R: [Resposta curta, confiante e que elimine a dúvida completamente]
+2. [Pergunta comum de comprador?]
+R: [Resposta curta, direta e confiante]
 
-P: [Pergunta direta como o comprador faria]
-R: [Resposta curta, confiante e que elimine a dúvida completamente]
-
-O QUE VEM NO KIT
-- [Produto 1] x [Quantidade]
+3. [Pergunta comum de comprador?]
+R: [Resposta curta, direta e confiante]
 
 IDEAL PARA
-[Parágrafo único de fechamento consolidando usos, públicos e situações onde o produto se destaca. Finalize com afirmação de autoridade ou qualidade que reforce a decisão de compra.]
+[Texto curto ou lista de superfícies, móveis, ambientes ou cenários reais onde o produto é indicado.]
+
+INFORMAÇÕES IMPORTANTES
+[Inclua somente se houver registro ANVISA, INMETRO ou advertência mandatória. Caso contrário, omita este cabeçalho.]
 
 ====================================
 DIRETRIZES DE ESTILO
 ====================================
-- Tom: Profissional, confiável e próximo.
-- Proibido usar: "O melhor do mundo", "Preço imbatível", "Entrega rápida", "Qualidade incomparável", "Não perca", "Compre agora".
-- Proibido usar adjetivos vazios sem comprovação: "incrível", "fantástico", "revolucionário", "surpreendente".
-- Cada seção deve parecer escrita especificamente para este produto. Texto genérico é PROIBIDO.
-- Use linguagem ativa e direta. Evite voz passiva.
-- Bullet points curtos, diretos e escaneáveis em celular.
-- NUNCA inclua números soltos de código de barras (EAN/SKU) no texto.
-- Escreva de forma fluida (ex: "Kit com 4 pacotes de Feltro Preto" em vez de "4 unidades de Kit Feltro Pct C/40").
-- Máximo de 2800 caracteres no total.
-- Os BENEFÍCIOS devem começar com verbo de ação no presente: Garante, Elimina, Protege, Facilita, Oferece...
-- Os DIFERENCIAIS devem conectar característica + benefício com " — ".
-- NUNCA altere, reordene ou renomeie os cabeçalhos de seção.
+- Proibido clichês: "Melhor do mercado", "Qualidade garantida", "Preço imbatível", "Não perca", "Compre agora".
+- NUNCA inclua números soltos de código de barras (EAN/SKU) no texto da descrição.
+- Texto 100% limpo, sem markdown complexo além de quebras de linha e bullets.
 
-Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
+Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional:
 {
   "descricao": "Texto completo da descrição com quebras de linha \\n"
 }"""
@@ -655,6 +735,61 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
     # Método principal
     # -------------------------------------------------------------------------
 
+    def _extrair_evidencias_imagens(self, imagens_urls: Optional[List[str]]) -> str:
+        """Extrai textos da embalagem, medidas e dados visuais via Gemini Vision multimodal."""
+        if not imagens_urls:
+            return ""
+        try:
+            partes_imagens = [
+                img for url in imagens_urls[:3]
+                if url and isinstance(url, str) and url.startswith("http")
+                if (img := baixar_imagem_para_base64(url))
+            ]
+            if not partes_imagens:
+                return ""
+
+            prompt_ocr = (
+                "Analise as imagens da embalagem do produto e extraia apenas fatos visíveis:\n"
+                "1. Textos da embalagem (marca, modelo, slogan técnico)\n"
+                "2. Dimensões, medidas, peso, volume e quantidade de peças na embalagem\n"
+                "3. Modo de uso / aplicação descrito no verso da embalagem\n"
+                "4. Superfícies indicadas, advertências e composição do material\n"
+                "Responda em tópicos curtos e objetivos."
+            )
+            res = self.gemini.chat_multimodal(
+                system_prompt="Você é um assistente de visão computacional para e-commerce.",
+                user_input=prompt_ocr,
+                imagens=partes_imagens,
+                modelo="gemini-2.5-flash",
+                use_cache=True,
+            )
+            return res.strip() if res else ""
+        except Exception as exc:
+            logger.warning("Falha ao extrair evidências visuais das imagens: %s", exc)
+            return ""
+
+    def _pesquisar_concorrentes_ml(
+        self,
+        nome_produto: str,
+        ean: str = "",
+        marca: str = "",
+        category_id: str = "",
+    ) -> str:
+        """Busca dados de catálogo e especificações de concorrentes no Mercado Livre."""
+        try:
+            from integracoes.mercadolivre.client import MercadoLivreClient
+            ml_client = MercadoLivreClient()
+            atribs = ml_client.buscar_atributos_catalogo_ml(
+                ean=ean, termo_busca=nome_produto, marca=marca, category_id=category_id
+            )
+            if not atribs:
+                return ""
+            itens = [f"{k}: {v}" for k, v in atribs.items() if v and str(v).lower() != "null"]
+            return "Especificações do Catálogo ML:\n" + "\n".join(itens[:10])
+        except Exception as exc:
+            logger.warning("Falha ao pesquisar concorrentes/catálogo no ML: %s", exc)
+            return ""
+
     def gerar_conteudo(
         self,
         nome_original: str,
@@ -665,6 +800,9 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
         atributos_obrigatorios: Optional[List[str]] = None,
         gera_grade: bool = False,
         category_id_ml: Optional[str] = None,
+        imagens_urls: Optional[List[str]] = None,
+        ean: str = "",
+        marca: str = "",
     ) -> Dict:
         import json
         import re
@@ -697,20 +835,28 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
         except json.JSONDecodeError:
             logger.error(f"Erro JSON Compliance: {res_comp}")
 
-        # --- AGENTE 2: TÍTULOS (Groq, temperatura 0.0) ---
+        # --- AGENTE 2: TÍTULOS (Gemini 2.5 Flash) ---
         if gera_grade:
             titulo, titulos_grade = self._gerar_grade_titulos(contexto, nome_original)
         else:
             titulo, titulos_grade = self._gerar_titulo_unitario(contexto, nome_original)
 
+        # --- EVIDÊNCIAS VISUAIS + PESQUISA CONCORRENTES ML ---
+        marca_ctx = str(marca or (features or {}).get("Marca") or (features or {}).get("marca") or "")
+        ean_ctx   = str(ean or (features or {}).get("EAN") or (features or {}).get("ean") or (features or {}).get("Código universal de produto") or "")
+        
+        logger.info("[Agente Visão] Extraindo evidências das imagens da embalagem...")
+        evidencias_visuais = self._extrair_evidencias_imagens(imagens_urls)
+        
+        logger.info("[Agente Concorrentes] Pesquisando referências e catálogo no Mercado Livre...")
+        dados_concorrentes = self._pesquisar_concorrentes_ml(nome_limpo, ean=ean_ctx, marca=marca_ctx, category_id=category_id_ml or "")
+
         # --- AGENTE 6: DESCRIÇÃO (Gemini 2.5 Flash) ---
         logger.info("[Agente 3] Gerando Descrição Copywriter (Gemini 2.5 Flash)...")
-        desc = self._gerar_descricao(titulo, contexto, descricao_atual)
+        desc = self._gerar_descricao(titulo, contexto, descricao_atual, evidencias_visuais, dados_concorrentes)
 
         # --- AGENTE 4: FICHA TÉCNICA (Catálogo ML + Groq Restrito) ---
         logger.info("[Agente 4] Extraindo Ficha Técnica (Catálogo ML + Groq Restrito)...")
-        marca_ctx = (features or {}).get("Marca") or (features or {}).get("marca") or ""
-        ean_ctx   = (features or {}).get("EAN") or (features or {}).get("ean") or (features or {}).get("Código universal de produto") or ""
         atribs = self._gerar_ficha_tecnica(contexto, atributos_obrigatorios, ean=str(ean_ctx), marca=str(marca_ctx), category_id_ml=category_id_ml or "")
 
         # --- AGENTE 5: PALAVRAS-CHAVE (Groq) ---
@@ -942,19 +1088,24 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
         fallback_text = fallback_text.replace('\\n', '\n').replace('\\"', '"')
         return fallback_text.strip()
 
-    def _gerar_descricao(self, titulo: str, contexto: str, descricao_atual: str) -> str:
-        """
-        Gera descrição via Gemini 2.5 Flash.
-        Valida presença das 5 seções obrigatórias antes de aceitar.
-        """
-        import json
+    def _gerar_descricao(
+        self,
+        titulo: str,
+        contexto: str,
+        descricao_atual: str,
+        evidencias_visuais: str = "",
+        dados_concorrentes: str = "",
+    ) -> str:
+        """Gera descrição via Gemini 2.5 Flash aplicando validação e sanitização rigorosa."""
+        desc, feedback_erro = "", ""
+        ctx_completo = contexto
+        if evidencias_visuais:
+            ctx_completo += f"\n\nEVIDÊNCIAS VISUAIS DA EMBALAGEM (OCR):\n{evidencias_visuais}"
+        if dados_concorrentes:
+            ctx_completo += f"\n\nDADOS DE CATÁLOGO / CONCORRENTES:\n{dados_concorrentes}"
 
-        max_tentativas = 3
-        desc = ""
-        feedback_erro = ""
-
-        for tentativa in range(max_tentativas):
-            input_prompt = f"Título Gerado: {titulo}\n{contexto}"
+        for tentativa in range(3):
+            input_prompt = f"Título Gerado: {titulo}\n{ctx_completo}"
             if feedback_erro:
                 input_prompt += f"\n\nATENÇÃO — Erros na tentativa anterior:\n{feedback_erro}\nCorrija no próximo JSON."
 
@@ -964,36 +1115,27 @@ Responda EXCLUSIVAMENTE em JSON, sem nenhum texto adicional ou explicação:
                 modelo="gemini-2.5-flash",
                 use_cache=(tentativa == 0),
             )
+            if not res_copy:
+                feedback_erro = "Resposta vazia. Retorne o JSON completo."
+                continue
 
             try:
-                if not res_copy:
-                    logger.warning(f"Descrição: resposta vazia na tentativa {tentativa + 1}.")
-                    feedback_erro = "A IA retornou vazio. Responda com o JSON completo."
-                    continue
-
-                desc_temp = self._parse_descricao_json(res_copy)
-                desc_temp = normalizar_descricao(desc_temp)
-
+                desc_temp = _limpar_travessoes(normalizar_descricao(self._parse_descricao_json(res_copy)))
                 if validar_descricao(desc_temp):
                     desc = desc_temp
-                    logger.info(f"Descrição aprovada ({len(desc)} chars) na tentativa {tentativa + 1}.")
+                    logger.info("Descrição aprovada (%d chars) na tentativa %d.", len(desc), tentativa + 1)
                     break
-                else:
-                    desc_norm = normalizar_texto_validador(desc_temp)
-                    secoes_faltando = [s for s in SECOES_OBRIGATORIAS if SECOES_OBRIGATORIAS_NORM[s] not in desc_norm]
-                    logger.warning(f"Tentativa {tentativa + 1}: seções ausentes: {secoes_faltando}")
-                    feedback_erro = f"Faltaram as seções obrigatórias: {secoes_faltando}"
-                    if tentativa == max_tentativas - 1:
-                        # Aceita o melhor que tiver na última tentativa
-                        desc = desc_temp
-                        logger.warning("Aceitando descrição parcial na última tentativa.")
 
+                desc_norm = normalizar_texto_validador(desc_temp)
+                faltantes = [s for s, n in SECOES_OBRIGATORIAS_NORM.items() if n not in desc_norm]
+                feedback_erro = f"Faltaram as seções obrigatórias: {faltantes}"
+                if tentativa == 2:
+                    desc = desc_temp
             except Exception as e:
-                res_snippet = res_copy[:200] if res_copy else "None"
-                logger.warning(f"Falha no JSON da Descrição (tentativa {tentativa + 1}): {e} | {res_snippet}")
-                feedback_erro = f"O formato retornado não foi um JSON válido ({e}). A resposta parecia cortada. Gere um JSON completo."
+                logger.warning("Falha no parse da Descrição (tentativa %d): %s", tentativa + 1, e)
+                feedback_erro = f"Erro de processamento: {e}"
 
-        return desc or descricao_atual
+        return _limpar_travessoes(desc or descricao_atual)
 
     def _gerar_ficha_tecnica(self, contexto: str, atributos_obrigatorios: Optional[List[str]], ean: str = "", marca: str = "", category_id_ml: str = "", produto_id: str = "0", sku: str = "", dados_internos: Optional[Dict] = None, quantidade: int = 1) -> Dict:
         """
@@ -1544,10 +1686,21 @@ class CriadorKitsService:
         nome_original      = str(tf.get("name") or dados.get("name") or "").strip()
         descricao_original = str(tf.get("description") or dados.get("description") or "").strip()
 
+        imgs_map = self._extrair_imagens(dados)
+        urls_imgs = [v.removeprefix("url:") for v in imgs_map.values() if v.startswith("url:http")]
+        ean_val = str((features or {}).get("EAN") or (features or {}).get("ean") or (features or {}).get("Código universal de produto") or "")
+        marca_val = str((features or {}).get("Marca") or (features or {}).get("marca") or "")
+
         conteudo = self.seo.gerar_conteudo(
-            nome_original, descricao_original, features, e_misto=e_misto,
+            nome_original,
+            descricao_original,
+            features,
+            e_misto=e_misto,
             atributos_obrigatorios=lista_obrigatorios_nomes,
             category_id_ml=category_id_ml,
+            imagens_urls=urls_imgs,
+            ean=ean_val,
+            marca=marca_val,
         )
 
         atribs_ia = conteudo.get("atributos") or {}
@@ -1569,9 +1722,16 @@ class CriadorKitsService:
                 else:
                     features[n_limpo] = "PREENCHER"
 
+        desc_ajustada = ajustar_descricao_quantidade(
+            conteudo["descricao"],
+            quantidade=1,
+            nome_produto=nome_original,
+            nomes_secundarios=[str((dados_secundario.get("text_fields", {}) or {}).get("name") or dados_secundario.get("name") or "").strip()] if dados_secundario else None,
+        )
+
         campos: Dict = {
             "name":        conteudo["titulo"],
-            "description": conteudo["descricao"],
+            "description": desc_ajustada,
             "features":    features,
         }
         for chave, valor in tf.items():
@@ -1745,35 +1905,38 @@ class CriadorKitsService:
         titulo_final: str,
         forcar_unitario: bool = False,
         gpc_manual: Optional[str] = None,
+        forcar_novo_gtin: bool = False,
     ) -> str:
         """
         Obtém ou gera um EAN para o kit.
         Unitário (qtd=1) -> sem novo EAN, exceto se forcar_unitario for True.
         Kit (qtd>1) -> Novo EAN registrado na GS1 Brasil.
+        forcar_novo_gtin=True -> não reaproveita GTIN de criações anteriores do mesmo SKU.
         """
         if quantidade <= 1 and not forcar_unitario:
             return ""
 
-        # Busca inteligente por quantidade no banco de dados local para compartilhamento de EAN
-        gtin_existente = GtinKit.objects.filter(
-            sku_origem=sku_origem,
-            quantidade=quantidade
-        ).exclude(gtin='PENDENTE').exclude(gtin='').first()
+        # Busca inteligente por quantidade no banco de dados local para compartilhamento de EAN (apenas se não forçar novos GTINs)
+        if not forcar_novo_gtin:
+            gtin_existente = GtinKit.objects.filter(
+                sku_origem=sku_origem,
+                quantidade=quantidade
+            ).exclude(gtin='PENDENTE').exclude(gtin='').first()
 
-        if gtin_existente:
-            logger.info(f"Reaproveitando EAN {gtin_existente.gtin} da variação {gtin_existente.sku_kit} para a quantidade {quantidade}")
-            obj, created = GtinKit.objects.get_or_create(
-                sku_kit=sku_kit_final,
-                defaults={
-                    'sku_origem': sku_origem,
-                    'quantidade': quantidade,
-                    'gtin': gtin_existente.gtin,
-                },
-            )
-            if not created and obj.gtin != gtin_existente.gtin:
-                obj.gtin = gtin_existente.gtin
-                obj.save()
-            return gtin_existente.gtin
+            if gtin_existente:
+                logger.info(f"Reaproveitando EAN {gtin_existente.gtin} da variação {gtin_existente.sku_kit} para a quantidade {quantidade}")
+                obj, created = GtinKit.objects.get_or_create(
+                    sku_kit=sku_kit_final,
+                    defaults={
+                        'sku_origem': sku_origem,
+                        'quantidade': quantidade,
+                        'gtin': gtin_existente.gtin,
+                    },
+                )
+                if not created and obj.gtin != gtin_existente.gtin:
+                    obj.gtin = gtin_existente.gtin
+                    obj.save()
+                return gtin_existente.gtin
 
         obj, created = GtinKit.objects.get_or_create(
             sku_kit=sku_kit_final,
@@ -1896,7 +2059,7 @@ class CriadorKitsService:
             val = dados.get("ean")
             return str(val).strip() if val else None
 
-        if "unidades por kit" in n or "unidades por embalagem" in n:
+        if is_unidades_por_kit_attribute(nome_campo):
             return str(quantidade)
 
         if "altura" in n:
@@ -1988,12 +2151,15 @@ class CriadorKitsService:
         gerar_ean_unitario: bool = False,
         gpc_manual: Optional[str] = None,
         skus_secundarios: Optional[List[str]] = None,
+        titulos_forcados: Optional[Dict[str, str]] = None,
+        forcar_novos_gtins: bool = False,
     ) -> Dict:
         """
         Cria a grade completa de 8 anúncios (1/2/3/4un x Clássico/Premium) no BaseLinker.
         Permite vários SKUs secundários para Kit Misto.
+        forcar_novos_gtins=True -> gera GTINs novos na GS1 para todos os kits, sem reaproveitar de lotes anteriores.
         """
-        logger.warning(f"Iniciando criação de GRADE (8 anúncios) -> SKU Origem={sku_origem} | EAN Unitário={gerar_ean_unitario}")
+        logger.warning(f"Iniciando criação de GRADE (8 anúncios) -> SKU Origem={sku_origem} | EAN Unitário={gerar_ean_unitario} | Novos GTINs={forcar_novos_gtins}")
         
         # Resolução de categoria (Exige categoria informada manualmente, sem adivinhação automática por título)
         if not category_id_ml or category_id_ml == "979589":
@@ -2081,6 +2247,10 @@ class CriadorKitsService:
         # Coleta atributos e gera conteúdo base (uma única chamada à IA)
         features_base     = self._extrair_features(dados)
         lista_obrigatorios = self._buscar_atributos_obrigatorios_ml(category_id_ml, features_base, dados)
+        imgs_map_grade = self._extrair_imagens(dados)
+        urls_imgs_grade = [v.removeprefix("url:") for v in imgs_map_grade.values() if v.startswith("url:http")]
+        ean_val_grade = str((features_base or {}).get("EAN") or (features_base or {}).get("ean") or (features_base or {}).get("Código universal de produto") or "")
+        marca_val_grade = str((features_base or {}).get("Marca") or (features_base or {}).get("marca") or "")
 
         conteudo_base = self.seo.gerar_conteudo(
             dados.get("name", ""),
@@ -2090,12 +2260,22 @@ class CriadorKitsService:
             atributos_obrigatorios=lista_obrigatorios,
             gera_grade=True,
             category_id_ml=category_id_ml,
+            imagens_urls=urls_imgs_grade,
+            ean=ean_val_grade,
+            marca=marca_val_grade,
         )
 
         titulos_grade = conteudo_base.get("titulos_grade", {})
         desc_base     = conteudo_base.get("descricao", "")
         atribs_ia     = conteudo_base.get("atributos", {})
         features_base.update(atribs_ia)
+
+        # ── OVERRIDE TEMPORÁRIO: títulos forçados manualmente ────────────────
+        # Quando titulos_forcados é passado (via painel_titulo_manual), substitui
+        # os títulos gerados pela IA. Não afeta nenhum outro fluxo.
+        if titulos_forcados:
+            titulos_grade = titulos_forcados
+            logger.info(f"[TITULO_MANUAL] Títulos da IA substituídos por títulos forçados para SKU {sku_origem}")
 
         # Trava de Segurança: Valida se a IA gerou título e descrição válidos
         nome_original_prod = (dados.get("text_fields", {}) or {}).get("name") or dados.get("name") or ""
@@ -2104,6 +2284,7 @@ class CriadorKitsService:
         erro_conteudo = self._validar_conteudo_ia(conteudo_para_validar, nome_original_prod)
         if erro_conteudo:
             return {"sucesso": False, "msg": erro_conteudo}
+
 
         campos_base = {
             "description": desc_base,
@@ -2151,22 +2332,27 @@ class CriadorKitsService:
             if not titulo_base:
                 titulo_base = conteudo_base.get('titulo', '')
 
-            # Limpeza agressiva: Remove Kit, Unidade, Unitário etc. do título base da IA
-            termos_limpar = [
-                "Kit", "Unidade", "Unidades", "Unitário", "Unitario", 
-                "Premium", "Clássico", "Classico", "Original", "Pack"
-            ]
-            for termo in termos_limpar:
-                # Regex para remover a palavra inteira isolada
-                titulo_base = re.sub(rf'\b{termo}\b', '', titulo_base, flags=re.IGNORECASE)
-            
-            titulo_final = " ".join(titulo_base.split()).strip()
+            if titulos_forcados:
+                # Títulos forçados chegam prontos (ex: "Kit 2 Antena TV...") —
+                # pula limpeza e re-prefixação que causariam duplicação do número.
+                titulo_final = " ".join(titulo_base.split()).strip()
+            else:
+                # Limpeza agressiva: Remove Kit, Unidade, Unitário etc. do título base da IA
+                termos_limpar = [
+                    "Kit", "Unidade", "Unidades", "Unitário", "Unitario",
+                    "Premium", "Clássico", "Classico", "Original", "Pack"
+                ]
+                for termo in termos_limpar:
+                    # Regex para remover a palavra inteira isolada
+                    titulo_base = re.sub(rf'\b{termo}\b', '', titulo_base, flags=re.IGNORECASE)
 
-            # Garante prefixo "Kit N" para kits ou limpa para unitário
-            if anuncio.quantidade > 1:
-                titulo_final = f"Kit {anuncio.quantidade} {titulo_final}".strip()
-            
-            titulo_final = " ".join(titulo_final.split()).strip()
+                titulo_final = " ".join(titulo_base.split()).strip()
+
+                # Garante prefixo "Kit N" para kits ou limpa para unitário
+                if anuncio.quantidade > 1:
+                    titulo_final = f"Kit {anuncio.quantidade} {titulo_final}".strip()
+
+                titulo_final = " ".join(titulo_final.split()).strip()
 
             # Ajuste final de tamanho por Python (Padding ou Corte)
             titulo_final = ajustar_titulo(titulo_final)
@@ -2229,6 +2415,13 @@ class CriadorKitsService:
 
             dimensoes_embalagem = self._selecionar_dimensoes_embalagem(dados, anuncio.quantidade)
 
+            desc_anuncio = ajustar_descricao_quantidade(
+                desc_base,
+                quantidade=anuncio.quantidade,
+                nome_produto=nome_original_prod,
+                nomes_secundarios=[(d.get("text_fields", {}) or {}).get("name") or d.get("name") or "" for d in dados_secundarios],
+            )
+
             payload = {
                 "inventory_id":    self.ID_INVENTARIO,
                 "sku":             sku_novo,
@@ -2238,7 +2431,7 @@ class CriadorKitsService:
                     **campos_base,
                     "name":        titulo_final,
                     "features":    features_var,
-                    "description": desc_base,
+                    "description": desc_anuncio,
                 },
                 "category_id":     category_id_bl,
                 "price_brutto":    anuncio.preco_vitrine,
@@ -2282,6 +2475,7 @@ class CriadorKitsService:
                             sku_origem, anuncio.quantidade, dados, sku_novo, 
                             titulo_final, forcar_unitario=(anuncio.quantidade == 1 and precisa_gerar_unitario),
                             gpc_manual=gpc_manual,
+                            forcar_novo_gtin=forcar_novos_gtins,
                         )
                         if ean_final and ean_final != 'PENDENTE':
                             self.gtins_gerados_lote[anuncio.quantidade] = ean_final
@@ -2297,7 +2491,8 @@ class CriadorKitsService:
                         "ean":          ean_final,
                         "text_fields":  {
                             **payload["text_fields"],
-                            "features": features_var,
+                            "features":    features_var,
+                            "description": desc_anuncio,
                         },
                     }
                     self.client._request("addInventoryProduct", update_payload)
@@ -2377,6 +2572,10 @@ class CriadorKitsService:
             descricao_original = tf.get("description") or dados.get("description") or ""
             features_base      = self._extrair_features(dados)
             lista_obrigatorios = self._buscar_atributos_obrigatorios_ml(category_id_ml, features_base, dados)
+            imgs_map_kit       = self._extrair_imagens(dados)
+            urls_imgs_kit      = [v.removeprefix("url:") for v in imgs_map_kit.values() if v.startswith("url:http")]
+            ean_val_kit        = str((features_base or {}).get("EAN") or (features_base or {}).get("ean") or (features_base or {}).get("Código universal de produto") or "")
+            marca_val_kit      = str((features_base or {}).get("Marca") or (features_base or {}).get("marca") or "")
 
             conteudo_ia = self.seo.gerar_conteudo(
                 nome_original_prod,
@@ -2386,6 +2585,9 @@ class CriadorKitsService:
                 atributos_obrigatorios=lista_obrigatorios,
                 gera_grade=False,
                 category_id_ml=category_id_ml,
+                imagens_urls=urls_imgs_kit,
+                ean=ean_val_kit,
+                marca=marca_val_kit,
             )
         except Exception as exc:
             return {"sucesso": False, "msg": f"Erro crítico na geração de conteúdo pela IA: {exc}"}
@@ -2469,13 +2671,13 @@ class CriadorKitsService:
                     novo_id = self.client.addInventoryCategory(self.ID_INVENTARIO, nome_nivel, parent_id_atual)
                     if not novo_id:
                         logger.error(f"Falha ao criar '{nome_nivel}' no BL.")
-                        return parent_id_atual if parent_id_atual > 0 else self.ID_CATEGORIA_KITS
+                        return parent_id_atual if (isinstance(parent_id_atual, int) and parent_id_atual > 0) else self.ID_CATEGORIA_KITS
                     cat_id = novo_id
                     mapa_bl[chave] = cat_id
 
                 parent_id_atual = cat_id
 
-            return parent_id_atual if parent_id_atual > 0 else self.ID_CATEGORIA_KITS
+            return parent_id_atual if (isinstance(parent_id_atual, int) and parent_id_atual > 0) else self.ID_CATEGORIA_KITS
 
         except Exception as exc:
             logger.error(f"Erro sincronizando categoria {category_id_ml}: {exc}")
@@ -2499,17 +2701,96 @@ class CriadorKitsService:
             logger.error(f"Erro ao contar vendas para {sku}: {exc}")
             return 0
 
-    def _obter_proximo_sku(self, sku_desejado: Optional[str]) -> Optional[str]:
-        if sku_desejado:
-            return str(sku_desejado)
+    def _sku_existe_no_banco_local(self, sku: str) -> bool:
+        """Verifica se o SKU já existe em qualquer tabela do banco de dados local."""
+        if not sku:
+            return False
+        sku_limpo = str(sku).strip()
+        try:
+            if HistoricoKit.objects.filter(Q(sku_kit=sku_limpo) | Q(sku_origem=sku_limpo)).exists():
+                return True
+            from produtos.models import Produto
+            if Produto.objects.filter(sku=sku_limpo).exists():
+                return True
+            from ..models.baselinker_kit_sku import BaselinkerKitSku
+            if sku_limpo.isdigit() and BaselinkerKitSku.objects.filter(sku=int(sku_limpo)).exists():
+                return True
+            if GtinKit.objects.filter(Q(sku_kit=sku_limpo) | Q(sku_origem=sku_limpo)).exists():
+                return True
+            from anuncios.models import FilaAnuncio
+            if FilaAnuncio.objects.filter(Q(sku_principal=sku_limpo) | Q(sku_secundario=sku_limpo)).exists():
+                return True
+            return False
+        except Exception as exc:
+            logger.error("Falha ao checar SKU %s no banco local: %s", sku_limpo, exc, exc_info=True)
+            return True
+
+    def _sku_existe_no_baselinker(self, sku: str) -> bool:
+        """Verifica em tempo real se o SKU já existe no catálogo do BaseLinker."""
+        if not sku:
+            return False
+        sku_limpo = str(sku).strip()
+        try:
+            pid = self.buscar_pid_por_sku(sku_limpo)
+            if pid:
+                logger.warning("SKU %s já cadastrado no BaseLinker com PID %s.", sku_limpo, pid)
+                if sku_limpo.isdigit():
+                    from ..models.baselinker_kit_sku import BaselinkerKitSku
+                    BaselinkerKitSku.objects.get_or_create(sku=int(sku_limpo), defaults={"product_id": str(pid)})
+                return True
+            return False
+        except Exception as exc:
+            logger.error("Falha ao verificar SKU %s no BaseLinker: %s", sku_limpo, exc, exc_info=True)
+            return True
+
+    def _get_next_kit_sku_raw(self) -> Optional[int]:
+        """Executa a alocação atômica via função PL/pgSQL get_next_kit_sku."""
         try:
             with connection.cursor() as cursor:
                 cursor.execute("SELECT get_next_kit_sku()")
                 row = cursor.fetchone()
-                return str(row[0]) if row and row[0] is not None else None
+                return int(row[0]) if row and row[0] is not None else None
         except Exception as exc:
-            logger.error(f"DB get_next_kit_sku: {exc}")
+            logger.error("DB get_next_kit_sku: %s", exc, exc_info=True)
             return None
+
+    def _get_next_kit_sku_atomico(self) -> Optional[int]:
+        """Método de alocação atômica individual de SKU."""
+        return self._get_next_kit_sku_raw()
+
+    def _obter_proximo_sku(self, sku_desejado: Optional[str]) -> Optional[str]:
+        """Aloca o próximo SKU garantindo unicidade no banco local e no BaseLinker."""
+        if sku_desejado:
+            sku_limpo = str(sku_desejado).strip()
+            if self._sku_existe_no_banco_local(sku_limpo) or self._sku_existe_no_baselinker(sku_limpo):
+                logger.error("SKU desejado %s já está em uso.", sku_limpo)
+                return None
+            return sku_limpo
+
+        for tentativa in range(1, 201):
+            candidato_int = self._get_next_kit_sku_raw()
+            if candidato_int is None:
+                logger.error("DB get_next_kit_sku retornou NULL na tentativa %s.", tentativa)
+                return None
+
+            candidato_str = str(candidato_int)
+
+            if candidato_int < 50000:
+                logger.warning("SKU %s descartado por estar abaixo de 50000.", candidato_str)
+                continue
+
+            if self._sku_existe_no_banco_local(candidato_str):
+                logger.warning("SKU %s já existe no banco de dados local. Alocando próximo...", candidato_str)
+                continue
+
+            if self._sku_existe_no_baselinker(candidato_str):
+                logger.warning("SKU %s já existe no BaseLinker. Alocando próximo...", candidato_str)
+                continue
+
+            return candidato_str
+
+        logger.error("Excedido limite de tentativas para alocar SKU inédito.")
+        return None
 
     def _enviar_para_baselinker(self, payload: Dict) -> Optional[str]:
         resp = self.client._request("addInventoryProduct", payload)
@@ -2530,16 +2811,20 @@ class CriadorKitsService:
             logger.error(f"Historico ({sku_origem}->{sku_kit}): {exc}")
 
     def _reciclar_numero(self, sku: str) -> None:
-        if not sku or not sku.isdigit():
+        """Insere SKU em NumeroReciclado apenas se >= 50000 e não utilizado no DB ou BaseLinker."""
+        if not sku or not str(sku).isdigit():
+            return
+        num = int(sku)
+        if num < 50000:
+            logger.info("Ignorando reciclagem do SKU %s por ser < 50000.", sku)
+            return
+        if self._sku_existe_no_banco_local(str(num)) or self._sku_existe_no_baselinker(str(num)):
+            logger.info("Ignorando reciclagem do SKU %s pois já está em uso.", sku)
             return
         try:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "INSERT INTO criacao_estruturado_numeroreciclado (numero) VALUES (%s) ON CONFLICT DO NOTHING",
-                    [int(sku)],
-                )
+            NumeroReciclado.objects.get_or_create(numero=num)
         except Exception as exc:
-            logger.warning(f"Reciclar {sku}: {exc}")
+            logger.warning("Falha ao reciclar SKU %s: %s", sku, exc)
 
     def executar_rollback_grade(self, sku_origem: str) -> Dict:
         """

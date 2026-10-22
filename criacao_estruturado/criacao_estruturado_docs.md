@@ -2,7 +2,9 @@
 
 ## Visão Geral
 
-O módulo `criacao_estruturado` é responsável pela criação automatizada de **grades de kits** no BaseLinker, com integração ao Mercado Livre. A partir de um único produto base, o sistema gera 6 variações de anúncio (1/2/3 unidades × Clássico/Premium), com títulos otimizados para SEO, descrição persuasiva, ficha técnica preenchida por IA, precificação automática via Motor R831 v2 e registro de EAN/GTIN na GS1 Brasil. Permite também a combinação de até 5 produtos no total (1 principal + até 4 secundários) para Kit Misto.
+O módulo `criacao_estruturado` é responsável pela criação automatizada de **grades de kits** no BaseLinker, com integração ao Mercado Livre. A partir de um único produto base, o sistema gera 8 variações de anúncio (1/2/3/4 unidades × Clássico/Premium), com títulos otimizados para SEO, descrição persuasiva, ficha técnica preenchida por IA, precificação automática via Motor R831 v2 e registro de EAN/GTIN na GS1 Brasil. Permite também a combinação de até 5 produtos no total (1 principal + até 4 secundários) para Kit Misto.
+
+> ⚠️ **RECURSO TEMPORÁRIO ATIVO (adicionado em 2026-08-26):** Existe uma página paralela em `/gerador-kits/titulo-manual/` para criação de kits com título unitário informado manualmente (usado quando o título já está ranqueado no ML). Para remover: deletar `views_titulo_manual.py`, `templates/painel_titulo_manual.html` e a linha correspondente em `urls.py`. Ver seção "Painel Temporário — Título Manual" abaixo.
 
 ---
 
@@ -73,15 +75,15 @@ Cache local dos SKUs de kits existentes no BaseLinker, usado para reconciliaçã
 | `sincronizado_em` | DateTimeField | Última sincronização |
 
 ### `ControleSequencia`
-Controla o próximo número de SKU a ser emitido (legado — substituído pela função PostgreSQL `get_next_kit_sku()`).
+Controla o próximo número de SKU a ser emitido (atualizado em 31/08/2026: a faixa de kits foi estabelecida em **50000 em diante** para não colidir com produtos estruturados da faixa 30000. Os 96 kits criados foram migrados no banco para **50000–50095**, e a sequência ativa no banco passa a gerar novos SKUs a partir de **50096** em diante).
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `nome` | CharField | Identificador da sequência |
-| `proximo_numero` | PositiveIntegerField | Próximo SKU a usar |
+| `nome` | CharField | Identificador da sequência (padrão: `'Sequencia Kits'`) |
+| `proximo_numero` | PositiveIntegerField | Próximo SKU a usar (sequência ativa: `50096`) |
 
 **Métodos:**
-- `get_sequencia()` — retorna ou cria o objeto de sequência
+- `get_sequencia()` — retorna ou cria o objeto de sequência (inicia em `50000`)
 - `avancar()` — retorna o número atual e incrementa +1
 
 ---
@@ -116,6 +118,12 @@ As seções verificadas são: `SOBRE O PRODUTO`, `BENEFÍCIOS`, `DIFERENCIAIS DO
 ### `normalizar_descricao(desc) -> str`
 Remove lixo e conteúdo indesejado antes do início da seção `SOBRE O PRODUTO`, garantindo que a descrição sempre inicie pela seção correta. Suporta de forma robusta variações de caixa (maiúscula/minúscula) e formatações markdown no cabeçalho da seção.
 
+### `ajustar_descricao_quantidade(descricao: str, quantidade: int, nome_produto: str = "", nomes_secundarios: Optional[List[str]] = None) -> str`
+Sincroniza dinamicamente a quantidade de itens na seção `O QUE VEM NO KIT` (ou `ITENS INCLUSOS`) de acordo com a quantidade real do anúncio/variação (`anuncio.quantidade`):
+- **Ajuste de Multiplicadores:** Converte automaticamente marcadores existentes (ex: `- Produto x 1`, `- 1x Produto`, `- Produto - 1 Unidade`, `- Produto (1 unidade)`) para o formato padronizado com a quantidade exata (ex: `- Produto x 3`).
+- **Kits Mistos:** Ajusta uniformemente os itens do produto principal e secundários.
+- **Injeção Resiliente:** Caso a IA omita a seção `O QUE VEM NO KIT`, ela é construída e injetada automaticamente antes de `IDEAL PARA` ou no final da descrição.
+
 ---
 
 ## Classe `SEOGenerator`
@@ -130,7 +138,9 @@ Orquestrador de agentes de IA especializados. Usa **Gemini 2.5 Flash** para Comp
 | **Agente 2A — Título Unitário** | Gemini 2.5 Flash | Gera 1 título otimizado (55–60 chars) |
 | **Agente 2B — Grade de Títulos** | Gemini 2.5 Flash | Gera 8 títulos base (t1_a→t4_b) |
 | **Agente 4 — Ficha Técnica** | Groq Llama 3.3 70B | Extrai/infere atributos técnicos |
-| **Agente 5 — Keywords** | Groq Llama 3.1 8B | Gera lista de palavras-chave SEO |
+| **Agente 5 — Keywords** | Groq Llama 3.2 3B | Gera lista de palavras-chave SEO |
+
+> *Atualizado em 2026-09-16: `llama-3.1-8b-instant` deprecado pela Groq em 16/08/2026. Substituído por `llama-3.2-3b-preview` nos agentes SEO/TECH.*
 | **Agente 6 — Descrição** | Gemini 2.5 Flash | Cria descrição completa com 5 seções |
 
 ### Regras do Agente 1 — Compliance
@@ -184,33 +194,49 @@ Ao resolver a categoria do produto (seja informada via URL ou prevista automatic
 
 *Atualizado em 2026-08-10: Implementado o Sistema de Ficha Técnica Inteligente com Rastreabilidade por Evidências, Extrator Groq gpt-oss-120b (strict: true), Validação Determinística Python, Auditoria Factual 100% por IA Gemini e Persistência no PostgreSQL.*
 
+*Atualizado em 2026-09-23: Mapeamento Dinâmico de Atributos de Unidades por Kit (`UNITS_PER_PACK`). A função `is_unidades_por_kit_attribute` reconhece dinamicamente nomes customizados por categoria no Mercado Livre (ex: "Quantidade de selantes e silicones", "Quantidade de frascos", "Quantidade de peças", "Unidades por embalagem") e garante o preenchimento automático da quantidade do kit sem expurgo nem erros de validação.*
+
 
 ### Regras do Agente 5 — Keywords
 - Categorias: Termos Primários, Secundários, de Kit, Alternativos
 - Para kits: inclui obrigatoriamente `"kit N [produto]"` e `"conjunto N [produto]"`
 - Mín. 12, máx. 25 termos; todos em minúsculas, sem pontuação
 
-### Regras do Agente 6 — Descrição (Copywriter)
-- Template fixo com 5 seções em ordem imutável
-- Máx. 2800 caracteres
-- PROIBIDO QUALQUER ALEGAÇÃO TERAPÊUTICA OU PROMESSA DE RESULTADO: Proibido prometer cura de doenças, tratamento de sintomas, emagrecimento, rejuvenescimento estético ou prevenção de males. Deve ser factual.
-- PROIBIDO TERMOS DE ENVIO OU GARANTIA: Proibido usar "Envio Rápido", "Envio Imediato", "Pronta Entrega", "Entrega Rápida", "Despacho Rápido", "Garantia", "Garantido", "Garantimos", "Garantia de Fábrica".
-- BENEFÍCIOS: começam com verbo no presente de forma funcional (Auxilia, Facilita, Protege...) sem efeitos subjetivos/milagrosos.
-- DIFERENCIAIS: formato `Característica — benefício`
-- Proibido: adjetivos vazios (incrível, revolucionário), clichês de marketing, EAN/SKU no texto, termos comerciais subjetivos (preço imbatível, garantido)
-- 3 tentativas; na última aceita o melhor disponível
-- **Resiliência contra cache corrompido:** utiliza `use_cache=(tentativa == 0)`. Se o cache retornar uma descrição incompleta ou inválida, a tentativa seguinte forçará a consulta em tempo real da API para re-gerar e atualizar o cache com sucesso.
+### Regras do Agente 6 — Descrição (Copywriter com Visão Computacional e Pesquisa ML)
+- **Visão Computacional Multimodal (OCR da Embalagem):** O sistema aciona o `GeminiClient.chat_multimodal` analisando as imagens da embalagem do produto antes da geração textual para extrair fatos reais (medidas milimétricas, quantidade de peças por cartela, instruções de uso no verso, material e composição).
+- **Pesquisa de Catálogo / Concorrentes no ML:** Consulta o catálogo oficial do Mercado Livre (`MercadoLivreClient.buscar_atributos_catalogo_ml`) para enriquecer a descrição com dados técnicos comprovados e dúvidas reais de compradores.
+- **Sobre o Produto Enxuto e Assertivo:** No máximo 2 parágrafos curtos (3 a 5 linhas), diretos ao ponto, sem enrolação ou repetição de clichês de marketing.
+- **Proibição Total de Travessões (`—`, `–`, `--`):** É terminantemente proibido o uso de qualquer travessão em toda a descrição. O sistema utiliza deterministamente dois-pontos (`: `), hífens (`-`) ou bullets (`•`).
+- **Template Fixo Padronizado:**
+  1. `SOBRE O PRODUTO`: Abertura enxuta e funcionalidade direta.
+  2. `PRINCIPAIS CARACTERÍSTICAS`: Lista escaneável com marcadores `•` contendo formato, cor, dimensões, fixação e material (quantidade omitida para produtos unitários — fica em CONTEÚDO DA COMPRA).
+  3. `BENEFÍCIOS`: Verbos no presente (Protege, Reduz, Prolonga, Facilita) com ganhos práticos.
+  4. `MODO DE USO`: Passo a passo numerado (1., 2., 3.) quando aplicável.
+  5. `CONTEÚDO DA COMPRA`: Quantidade e itens inclusos sincronizados dinamicamente pelo `ajustar_descricao_quantidade`.
+  6. `DÚVIDAS FREQUENTES`: 3 perguntas e respostas numeradas curtas que eliminam objeções de compra.
+  7. `IDEAL PARA`: Cenários de uso, móveis e superfícies indicadas.
+  8. `INFORMAÇÕES IMPORTANTES`: Disclaimer regulatório (ex: ANVISA/INMETRO) se aplicável.
+- **Regra da Consulta ao Campo Responsável para Quantidades:** Sempre que houver necessidade de exibir ou ajustar a quantidade de um produto/variação (seja em CONTEÚDO DA COMPRA, títulos ou Ficha Técnica), o sistema consulta obrigatoriamente o campo responsável de quantidade (`quantidade`, `qtd_kit`, `unidades_por_kit`, `anuncio.quantidade`, etc.). É expressamente proibido preencher ou assumir '1 unidade' como valor padrão genérico.
+- **Sanitização Determinística Python:** A função `_limpar_travessoes()` e o validador `validar_descricao()` garantem no pós-processamento a ausência de caracteres indesejados e a presença das seções obrigatórias.
+
+*Atualizado em 2026-09-15: Descrição Enxuta, Visão Computacional OCR de Embalagens (Gemini Vision Multimodal), Pesquisa de Catálogo de Concorrentes ML, Ajuste de Quantidade em CONTEÚDO DA COMPRA e Eliminação Rigorosa de Travessões.*
+
+*Atualizado em 2026-09-22: Obrigatória a consulta ao campo responsável pela quantidade (`quantidade`, `qtd_kit`, `unidades_por_kit`) antes de preencher qualquer valor de quantidade no sistema, eliminando a injeção genérica de '1 unidade'.*
 
 ### Método `gerar_conteudo()`
-```
+```python
 gerar_conteudo(
-    nome_original,         # Nome do produto base
-    descricao_atual="",    # Descrição existente (fallback)
-    features=None,         # Atributos já conhecidos
-    qtd_kit=1,             # Quantidade do kit
-    e_misto=False,         # Kit com dois produtos diferentes
-    atributos_obrigatorios=None,  # Campos obrigatórios do ML
-    gera_grade=False,      # True=gera 8 títulos, False=1 título
+    nome_original: str,              # Nome do produto base
+    descricao_atual: str = "",       # Descrição existente (fallback)
+    features: Optional[Dict] = None, # Atributos já conhecidos
+    qtd_kit: int = 1,                # Quantidade do kit
+    e_misto: bool = False,           # Kit com dois produtos diferentes
+    atributos_obrigatorios: Optional[List[str]] = None, # Campos obrigatórios do ML
+    gera_grade: bool = False,        # True=gera 8 títulos, False=1 título
+    category_id_ml: Optional[str] = None, # Categoria oficial do ML
+    imagens_urls: Optional[List[str]] = None, # URLs das imagens para OCR da embalagem
+    ean: str = "",                   # Código EAN para busca de catálogo ML
+    marca: str = "",                 # Marca do produto para refinamento de busca
 ) -> Dict
 ```
 **Retorna:**
@@ -218,7 +244,7 @@ gerar_conteudo(
 {
     "titulo":        str,   # Título principal (≤60 chars)
     "titulos_grade": dict,  # {"1_classico": ..., "4_premium": ...}
-    "descricao":     str,   # Texto completo com 5 seções
+    "descricao":     str,   # Texto completo e assertivo sem travessões
     "atributos":     dict,  # Ficha técnica extraída pela IA
     "keywords":      dict,  # Termos SEO categorizados
 }
@@ -410,10 +436,19 @@ Retorna mensagem de erro se a validação falhar completamente, ou `None` se est
 
 ### Métodos de Utilitários
 
+#### `_sku_existe_no_banco_local(sku) -> bool`
+Verifica se o SKU já existe em qualquer tabela do banco de dados local (`HistoricoKit`, `Produto`, `BaselinkerKitSku`, `GtinKit`, `FilaAnuncio`). Retorna `True` se já estiver cadastrado.
+
+#### `_sku_existe_no_baselinker(sku) -> bool`
+Consulta em tempo real o catálogo do BaseLinker via `buscar_pid_por_sku(sku)`. Se o SKU for encontrado com um PID, sincroniza o cache local `BaselinkerKitSku` e retorna `True`.
+
 #### `_obter_proximo_sku(sku_desejado) -> Optional[str]`
-- Se `sku_desejado` informado → retorna esse SKU diretamente
-- Caso contrário → chama função PostgreSQL `get_next_kit_sku()` via raw SQL
-- Retorna `None` em caso de falha
+- Se `sku_desejado` for informado: valida se o SKU não existe no banco local nem no BaseLinker antes de alocar.
+- Se alocação automática: consome números via função PostgreSQL `get_next_kit_sku()` em loop e garante que o SKU candidato:
+  1. Seja `≥ 31000` (descartando quaisquer números legados ou da faixa conflituosa 20000–20095).
+  2. Não exista em nenhuma tabela do banco de dados local (`_sku_existe_no_banco_local`).
+  3. Não exista no catálogo do BaseLinker (`_sku_existe_no_baselinker`).
+- Retorna o primeiro SKU 100% inédito e livre encontrado, ou `None` em caso de esgotamento/falha.
 
 #### `_enviar_para_baselinker(payload) -> Optional[str]`
 Chama `addInventoryProduct` e retorna o `product_id` do kit criado. Levanta `Exception` se não receber `product_id`.
@@ -422,7 +457,7 @@ Chama `addInventoryProduct` e retorna o `product_id` do kit criado. Levanta `Exc
 Persiste o registro de criação em `HistoricoKit`. Erros são apenas logados, não propagados.
 
 #### `_reciclar_numero(sku) -> None`
-Insere o SKU na tabela `NumeroReciclado` via SQL com `ON CONFLICT DO NOTHING`. Só processa SKUs numéricos.
+Insere o SKU na tabela `NumeroReciclado` apenas se `sku >= 31000` e o SKU não estiver em uso nem no banco de dados local nem no BaseLinker. Só processa SKUs numéricos válidos.
 
 #### `executar_rollback_grade(sku_origem) -> Dict`
 Realiza o desfazimento completo (rollback) de um lote inteiro de 8 variações a partir do `sku_origem` (base).
@@ -485,14 +520,15 @@ executar_criacao_grade(
     c. Limpeza agressiva do título: remove Kit, Unidade, Unitário, Premium, Clássico, Pack, Original
     d. Adicionar prefixo "Kit N" para quantidade > 1
     e. ajustar_titulo() — padding/corte para 55–60 chars
-    f. Determinar tag principal (classico/premium) e injetar tag "Marketplace" se Qtd == 1 e for modalidade Clássico
-    g. Montar payload completo
-    h. _enviar_para_baselinker() → obter id_kit
-    i. _salvar_historico()
-    j. Se quantidade > 1 ou (quantidade == 1 e gerar_ean_unitario):
+    f. Ajustar descrição com a quantidade real da variação via ajustar_descricao_quantidade()
+    g. Determinar tag principal (classico/premium) e injetar tag "Marketplace" se Qtd == 1 e for modalidade Clássico
+    h. Montar payload completo
+    i. _enviar_para_baselinker() → obter id_kit
+    j. _salvar_historico()
+    k. Se quantidade > 1 ou (quantidade == 1 e gerar_ean_unitario):
        Aguardar 2s e gerar EAN via _obter_ean_kit()
-    k. Se EAN gerado: atualizar produto no BaseLinker com EAN e ficha técnica
-    l. Em erro: _reciclar_numero() e continuar
+    l. Se EAN gerado: atualizar produto no BaseLinker com EAN, Ficha Técnica e Descrição ajustada
+    m. Em erro: _reciclar_numero() e continuar
 
 Retorna:
 {
@@ -524,17 +560,18 @@ Para garantir uma experiência de uso premium e livre de atritos, a interface fo
 2. **Reset Inteligente por Javascript:** Injetado um listener de inicialização no template `painel_kits.html`. Ao carregar a página, se for detectada a mensagem de sucesso de criação de grade de kits, o script limpa automaticamente todos os inputs de texto, URLs, hidden-inputs e desmarca os checkboxes dos formulários da esquerda (`form-analisar`) e oculto (`form-criacao`), fazendo a interface retornar com perfeição ao estado inicial de *"Aguardando produto..."*.
 
 ### Ação `analisar`
-1. Recebe SKU manual (+ SKU secundário, URL do ML e `gerar_ean_unitario` opcionais)
+1. Recebe SKU manual (+ SKU secundário, URL do ML, `forcar_novos_gtins` e `gerar_ean_unitario` opcionais)
 2. Busca PID no BaseLinker
 3. Resolve `category_id_ml` via URL do produto (ou usa padrão)
 4. Chama `_analisar_com_grade()` → retorna grade de preços sem criar nada
 5. Exibe status: 🟢 Verde / 🟡 Amarelo / 🔴 Vermelho
-6. Armazena `gerar_ean_unitario` para a próxima etapa.
+6. Armazena `forcar_novos_gtins` e `gerar_ean_unitario` para a próxima etapa.
 
 ### Ação `confirmar_criacao`
-1. Recebe SKU + category_id_ml + `gerar_ean_unitario` do formulário
-2. Chama `servico.executar_criacao_grade(..., gerar_ean_unitario=...)`
-3. Exibe mensagem de sucesso com SKUs criados
+1. Recebe SKU + category_id_ml + `forcar_novos_gtins` + `gerar_ean_unitario` do formulário
+2. Chama `servico.executar_criacao_grade(..., forcar_novos_gtins=..., gerar_ean_unitario=...)`
+3. Se `forcar_novos_gtins=True` (padrão marcado), gera GTINs exclusivos na GS1 para cada variação de quantidade sem reaproveitar de criações anteriores do mesmo SKU de origem.
+4. Exibe mensagem de sucesso com SKUs criados
 
 ### Ação `rollback`
 1. Recebe o SKU de origem a ser desfeito.
@@ -717,3 +754,33 @@ sequenceDiagram
   - Garantido que as dimensões físicas (`height`, `width`, `length`) enviadas para a API do BaseLinker (`addInventoryProduct`) sejam sempre números inteiros arredondados (`int(round(float(v)))`).
   - Previne que produtos de catálogo cadastrados originalmente com medidas decimais (ex: largura `8.14 cm`) propaguem números decimais para o painel do BaseLinker e marketplaces.
   - O método `_selecionar_dimensoes_embalagem` e a montagem de payload em `executar_criacao_grade` e `_montar_payload` foram blindados com conversão estrita para inteiros.
+
+### Atualizado em 2026-08-26 — Painel Temporário: Título Manual
+
+**Contexto:** Adicionada funcionalidade temporária para criar grades de kits usando um título unitário já ranqueado no Mercado Livre (sem gerar título pela IA).
+
+#### `executar_criacao_grade()` — Novo parâmetro `titulos_forcados`
+- Parâmetro opcional `titulos_forcados: Optional[Dict[str, str]] = None` adicionado à assinatura.
+- Se fornecido, substitui o dicionário `titulos_grade` gerado pelos Agentes 2A/2B logo após a geração de conteúdo pela IA.
+- Descrição, ficha técnica e keywords continuam sendo geradas normalmente pela IA.
+- Quando `titulos_forcados=None` (padrão), comportamento 100% idêntico ao original.
+
+#### Arquivo `views_titulo_manual.py` ⚠️ TEMPORÁRIO
+View isolada com lógica de derivação de títulos. Contém:
+- `derivar_titulos_kit(titulo_unitario)` — gera os 8 títulos da grade a partir do título unitário, removendo termos de quantidade/modalidade e adicionando `"Kit N "` com corte inteligente de palavras para respeitar 60 chars.
+- `painel_titulo_manual(request)` — view com ação `preview` (pré-visualiza títulos) e `confirmar_criacao` (cria a grade).
+
+#### Arquivo `templates/painel_titulo_manual.html` ⚠️ TEMPORÁRIO
+Template com o mesmo design visual do `painel_kits.html`. Recursos:
+- Contador de caracteres em tempo real (0/60) no campo de título
+- Pré-visualização dos títulos derivados com indicador de qualidade (✅ 53–60 / 🟡 45–52 / 🔴 < 45)
+- Botão de criação habilitado apenas após pré-visualização bem-sucedida
+- Badge "TEMPORÁRIO — SERÁ REMOVIDO" visível na interface
+
+#### URL: `/gerador-kits/titulo-manual/` — `name='painel_titulo_manual'`
+
+#### Para remover este recurso quando não for mais necessário:
+1. Deletar `criacao_estruturado/views_titulo_manual.py`
+2. Deletar `criacao_estruturado/templates/painel_titulo_manual.html`
+3. Remover o import e o `path(...)` correspondente em `criacao_estruturado/urls.py`
+4. Remover o parâmetro `titulos_forcados` de `executar_criacao_grade()` e o bloco `if titulos_forcados:` em `criador_kits_service.py`

@@ -2,8 +2,13 @@ import re
 import logging
 import hashlib
 from django.core.management.base import BaseCommand
+from django.db import close_old_connections
 from criacao_estruturado.models.historico_kit import HistoricoKit
-from criacao_estruturado.services.criador_kits_service import CriadorKitsService
+from criacao_estruturado.models.gtin_kit import GtinKit
+from criacao_estruturado.services.criador_kits_service import (
+    CriadorKitsService,
+    ajustar_descricao_quantidade,
+)
 from integracoes.gemini.client import GeminiClient
 
 logger = logging.getLogger("django")
@@ -212,6 +217,11 @@ class Command(BaseCommand):
 
         historicos = list(query)
         total = len(historicos)
+        
+        # Mapeamento em memória para evitar queries individuais durante o loop
+        gtin_map = dict(GtinKit.objects.values_list("sku_kit", "quantidade"))
+        close_old_connections()
+        
         self.stdout.write(self.style.WARNING(f"Encontrados {total} registros de histórico para analisar descrições..."))
 
         alterados = 0
@@ -331,6 +341,34 @@ class Command(BaseCommand):
                 else:
                     # Correção rápida via expressões regulares para não-saúde
                     desc_corrigida, termos_identificados = corrigir_programatico(desc_atual)
+
+                nome_prod = (raw.get("text_fields", {}) or {}).get("name") or raw.get("name") or ""
+
+                # Identifica a quantidade do kit
+                qtd_kit = gtin_map.get(sku) or 0
+                if not qtd_kit:
+                    match_kit = re.search(r'\bKit\s+(\d+)\b', nome_prod, re.IGNORECASE)
+                    if match_kit:
+                        qtd_kit = int(match_kit.group(1))
+                if not qtd_kit:
+                    bundles = raw.get("bundle_products")
+                    if isinstance(bundles, dict) and bundles:
+                        try:
+                            qtd_kit = max(int(v) for v in bundles.values())
+                        except (ValueError, TypeError):
+                            pass
+                if not qtd_kit or qtd_kit < 1:
+                    qtd_kit = 1
+
+                # Aplica o ajuste de quantidade na seção O QUE VEM NO KIT
+                desc_ajustada = ajustar_descricao_quantidade(
+                    desc_corrigida,
+                    quantidade=qtd_kit,
+                    nome_produto=nome_prod,
+                )
+                if desc_ajustada != desc_corrigida:
+                    termos_identificados.append(f"Ajuste de quantidade no kit ({qtd_kit} un)")
+                    desc_corrigida = desc_ajustada
 
                 if desc_corrigida == desc_atual or not desc_corrigida:
                     continue

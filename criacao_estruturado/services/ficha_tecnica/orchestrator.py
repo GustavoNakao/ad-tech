@@ -17,7 +17,7 @@ from .evidence import EvidenceCollector
 from .extractor import FichaTecnicaExtractor
 from .models import AttributeCandidate, AttributeStatus, AuditReport, EvidencePackage
 from .normalizer import FichaTecnicaNormalizer
-from .validator import FichaTecnicaValidator
+from .validator import FichaTecnicaValidator, is_unidades_por_kit_attribute
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class FichaTecnicaOrchestrator:
         features_normalizadas = self.normalizer.normalizar_e_expurgar(features_candidatas, atributos_obrigatorios)
 
         # ── PASSO 6: VALIDAÇÃO DETERMINÍSTICA 1 (PYTHON) & KITS ──
-        features_kits = self.validator.resolver_atributos_fisicos_kit(features_normalizadas, quantidade=quantidade)
+        features_kits = self.validator.resolver_atributos_fisicos_kit(features_normalizadas, quantidade=quantidade, atributos_obrigatorios=atributos_obrigatorios)
 
         # ── PASSO 7: DETECÇÃO DE CONFLITOS E HIERARQUIA DE FONTES ──
         features_sem_conflitos, atributos_detalhados, conflitos = self.conflict_detector.analisar_e_resolver_conflitos(
@@ -150,7 +150,7 @@ class FichaTecnicaOrchestrator:
         for cand in atributos_detalhados:
             if cand.status in (AttributeStatus.NAO_VERIFICADO, AttributeStatus.INVALIDO):
                 # Mantém apenas atributos estruturais fixos de kit/unidade se foram calculados
-                if cand.nome not in ("Formato de venda", "Quantidade", "Unidades por kit", "Condição do item", "Tipo de unidade", "Unidade de venda"):
+                if cand.nome not in ("Formato de venda", "Quantidade", "Unidades por kit", "Condição do item", "Tipo de unidade", "Unidade de venda") and not is_unidades_por_kit_attribute(cand.nome):
                     if cand.nome in features_estritas:
                         logger.info("[FichaTecnicaOrchestrator] Omitindo atributo não 100%% verificado: '%s'", cand.nome)
                         del features_estritas[cand.nome]

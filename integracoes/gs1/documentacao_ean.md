@@ -468,7 +468,12 @@ Exportado em `exports/export_gs1/`, permitindo o funcionamento independente do f
 - `web_app.py`: Servidor HTTP autônomo (`python web_app.py`).
 - `templates/gerar_ean.html`: Interface web responsiva com glassmorphism, suporte a cópia de GTIN e tratamentos visuais.
 
+### 14.1 Resolução de Marca / Fabricante no BaseLinker (Atualização de 25/09/2026)
+- **Suporte a `manufacturer_id`:** O cliente `BaselinkerClient` resolve o ID do fabricante via chamada `getInventoryManufacturers` (cacheado localmente), convertendo `manufacturer_id` no nome textual da marca selecionada no painel do BaseLinker.
+- **Normalização de Features:** Suporta estruturas de features presentes na raiz (`dados["features"]`) e em `text_fields["features"]`, cobrindo dicionários e listas chave/valor para marcas e NCMs.
+
 ---
 
 > 💬 **Dúvidas?** Consulte o líder técnico antes de implementar qualquer variação das regras acima. Este documento é a fonte da verdade para o módulo de anúncios.
+
 

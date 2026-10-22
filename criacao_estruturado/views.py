@@ -53,6 +53,7 @@ def painel_kits(request):
         skus_raw           = request.POST.getlist("sku_secundario")
         categoria_input    = request.POST.get("categoria_ml", "").strip() or request.POST.get("url_produto_ml", "").strip() or None
         gerar_ean_unitario = request.POST.get("gerar_ean_unitario") == "on"
+        forcar_novos_gtins = request.POST.get("forcar_novos_gtins") == "on" or gerar_ean_unitario
 
         # Resolve, unique, and filter out empty and primary SKU, respecting the 20-SKU mix cap.
         skus_secundarios = _normalizar_skus_secundarios(skus_raw, sku_manual, max_skus=20)
@@ -88,6 +89,7 @@ def painel_kits(request):
                 gerar_ean_unitario=gerar_ean_unitario,
                 gpc_manual=gpc_manual,
                 skus_secundarios=skus_secundarios,
+                forcar_novos_gtins=forcar_novos_gtins,
             )
             if resp["sucesso"]:
                 tipo = "Kit Misto" if e_misto else "Kit"

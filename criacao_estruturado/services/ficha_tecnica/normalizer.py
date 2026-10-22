@@ -11,6 +11,8 @@ import logging
 import re
 from typing import Dict, List, Set
 
+from .validator import FichaTecnicaValidator, is_unidades_por_kit_attribute
+
 logger = logging.getLogger(__name__)
 
 
@@ -87,7 +89,7 @@ class FichaTecnicaNormalizer:
             k_lower_canonico = k_canonico.lower()
 
             # Descarta chaves sobressalentes que não pertencem ao formulário da categoria
-            if k_lower_canonico not in chaves_permitidas:
+            if k_lower_canonico not in chaves_permitidas and not is_unidades_por_kit_attribute(k_canonico):
                 logger.debug("[FichaTecnicaNormalizer] Expurgo de chave sem formulário na categoria: '%s'", k_canonico)
                 continue
 

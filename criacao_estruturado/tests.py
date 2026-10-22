@@ -4,6 +4,7 @@ Testes de integração: falhas de rede, concorrência e deleção manual.
 import threading
 from unittest.mock import patch, MagicMock
 
+import unittest
 from django.test import TestCase, override_settings
 from django.db import connection
 
@@ -16,6 +17,7 @@ from .models import (
 from .services.criador_kits_service import (
     CriadorKitsService,
     _is_sku_already_exists_error,
+    ajustar_descricao_quantidade,
 )
 from .services.ficha_tecnica.categoria_atributos_service import CategoriaAtributosMLService
 
@@ -26,24 +28,24 @@ class GetNextKitSkuTests(TestCase):
     def setUp(self):
         ControleSequencia.objects.all().delete()
         NumeroReciclado.objects.all().delete()
-        ControleSequencia.objects.create(nome="Sequencia Kits", proximo_numero=10000)
+        ControleSequencia.objects.create(nome="Sequencia Kits", proximo_numero=50000)
 
     def test_get_next_kit_sku_from_sequence(self):
         service = CriadorKitsService()
         sku = service._get_next_kit_sku_atomico()
         self.assertIsNotNone(sku)
-        self.assertEqual(sku, 10000)
+        self.assertEqual(sku, 50000)
         seq = ControleSequencia.objects.get(nome="Sequencia Kits")
-        self.assertEqual(seq.proximo_numero, 10001)
+        self.assertEqual(seq.proximo_numero, 50001)
 
     def test_get_next_kit_sku_prioriza_recycled(self):
-        NumeroReciclado.objects.create(numero=9999)
+        NumeroReciclado.objects.create(numero=50500)
         service = CriadorKitsService()
         sku = service._get_next_kit_sku_atomico()
-        self.assertEqual(sku, 9999)
-        self.assertFalse(NumeroReciclado.objects.filter(numero=9999).exists())
+        self.assertEqual(sku, 50500)
+        self.assertFalse(NumeroReciclado.objects.filter(numero=50500).exists())
         seq = ControleSequencia.objects.get(nome="Sequencia Kits")
-        self.assertEqual(seq.proximo_numero, 10000)
+        self.assertEqual(seq.proximo_numero, 50000)
 
     def test_concorrencia_alocacao_sem_gaps(self):
         """Múltiplas threads alocando SKUs não devem gerar duplicatas."""
@@ -77,12 +79,69 @@ class TriggerHistoricoKitDeleteTests(TestCase):
         HistoricoKit.objects.create(
             sku_origem="30001",
             id_origem="123",
-            sku_kit="15001",
+            sku_kit="50001",
             id_kit="456",
         )
-        self.assertFalse(NumeroReciclado.objects.filter(numero=15001).exists())
-        HistoricoKit.objects.filter(sku_kit="15001").delete()
-        self.assertTrue(NumeroReciclado.objects.filter(numero=15001).exists())
+        self.assertFalse(NumeroReciclado.objects.filter(numero=50001).exists())
+        HistoricoKit.objects.filter(sku_kit="50001").delete()
+        self.assertTrue(NumeroReciclado.objects.filter(numero=50001).exists())
+
+
+class SkuDuplicatePreventionTests(TestCase):
+    """Testes de garantia de não repetição contra banco local e BaseLinker."""
+
+    def setUp(self):
+        ControleSequencia.objects.all().delete()
+        NumeroReciclado.objects.all().delete()
+        HistoricoKit.objects.all().delete()
+        BaselinkerKitSku.objects.all().delete()
+        ControleSequencia.objects.create(nome="Sequencia Kits", proximo_numero=50000)
+
+    def test_sku_existe_no_banco_local(self):
+        service = CriadorKitsService()
+        self.assertFalse(service._sku_existe_no_banco_local("50005"))
+
+        HistoricoKit.objects.create(
+            sku_origem="30001",
+            id_origem="111",
+            sku_kit="50005",
+            id_kit="222",
+        )
+        self.assertTrue(service._sku_existe_no_banco_local("50005"))
+
+    @patch.object(CriadorKitsService, "buscar_pid_por_sku")
+    def test_sku_existe_no_baselinker(self, mock_buscar_pid):
+        mock_buscar_pid.return_value = "98765"
+        service = CriadorKitsService()
+        self.assertTrue(service._sku_existe_no_baselinker("50010"))
+        self.assertTrue(BaselinkerKitSku.objects.filter(sku=50010).exists())
+
+    @patch.object(CriadorKitsService, "buscar_pid_por_sku")
+    def test_obter_proximo_sku_pula_existentes(self, mock_buscar_pid):
+        """Se 50000 existe no DB e 50001 no BL, deve retornar 50002."""
+        HistoricoKit.objects.create(
+            sku_origem="30001",
+            id_origem="111",
+            sku_kit="50000",
+            id_kit="222",
+        )
+
+        def side_effect_buscar(sku):
+            return "999" if str(sku) == "50001" else None
+
+        mock_buscar_pid.side_effect = side_effect_buscar
+
+        service = CriadorKitsService()
+        sku_alocado = service._obter_proximo_sku(None)
+        self.assertEqual(sku_alocado, "50002")
+
+    def test_reciclar_numero_ignora_menor_50000_ou_em_uso(self):
+        service = CriadorKitsService()
+        service._reciclar_numero("31005")
+        self.assertFalse(NumeroReciclado.objects.filter(numero=31005).exists())
+
+        service._reciclar_numero("50050")
+        self.assertTrue(NumeroReciclado.objects.filter(numero=50050).exists())
 
 
 class SkuConflictDetectionTests(TestCase):
@@ -167,7 +226,7 @@ class CriadorKitsServiceIntegrationTests(TestCase):
         ]
 
         service = CriadorKitsService()
-        resultado = service.executar_criacao("123", "30001")
+        resultado = service.executar_criacao("123", "30001", category_id_ml="MLB271283")
 
         self.assertTrue(resultado["sucesso"], resultado.get("msg", ""))
         self.assertIn("sku_novo", resultado)
@@ -190,3 +249,113 @@ class CriadorKitsServiceIntegrationTests(TestCase):
         # SKU foi alocado mas falhou a criação - deve ter sido reciclado
         # (o serviço recicla quando não há sku_conflict)
         self.assertIn("msg", resultado)
+
+
+from .services.criador_kits_service import (
+    CriadorKitsService,
+    _is_sku_already_exists_error,
+    ajustar_descricao_quantidade,
+    _limpar_travessoes,
+    validar_descricao,
+)
+
+
+class AjustarDescricaoQuantidadeTests(unittest.TestCase):
+    """Testes para ajuste de quantidade, validação e sanitização de descrição."""
+
+    def test_limpar_travessoes(self):
+        """Garante que travessões são substituídos por dois-pontos ou hífens."""
+        texto_sujo = "Protetor 3M — 12 Peças – Alta fixação -- Resistente"
+        limpo = _limpar_travessoes(texto_sujo)
+        self.assertNotIn("—", limpo)
+        self.assertNotIn("–", limpo)
+        self.assertNotIn("--", limpo)
+        self.assertEqual(limpo, "Protetor 3M: 12 Peças: Alta fixação: Resistente")
+
+    def test_validar_descricao_novo_template(self):
+        """Valida se o validador reconhece o formato assertivo com marcadores."""
+        desc = (
+            "SOBRE O PRODUTO\n"
+            "Texto curto e direto.\n\n"
+            "PRINCIPAIS CARACTERÍSTICAS\n"
+            "• 12 peças\n• Formato redondo\n\n"
+            "BENEFÍCIOS\n"
+            "• Protege superfícies\n\n"
+            "MODO DE USO\n"
+            "1. Limpe a área\n\n"
+            "CONTEÚDO DA COMPRA\n"
+            "• 1x Protetor Anti-Risco\n\n"
+            "DÚVIDAS FREQUENTES\n"
+            "1. Pergunta?\nR: Resposta.\n\n"
+            "IDEAL PARA\n"
+            "Pés de cadeiras e mesas."
+        )
+        self.assertTrue(validar_descricao(desc))
+
+    def test_ajustar_quantidade_conteudo_da_compra(self):
+        """Ajusta quantidade na seção CONTEÚDO DA COMPRA com marcador •."""
+        desc = (
+            "SOBRE O PRODUTO\n"
+            "Descrição do termômetro.\n\n"
+            "CONTEÚDO DA COMPRA\n"
+            "• Termômetro Clínico Digital G-Tech x 1\n\n"
+            "IDEAL PARA\n"
+            "Uso doméstico."
+        )
+        ajustada = ajustar_descricao_quantidade(desc, quantidade=3)
+        self.assertIn("• Termômetro Clínico Digital G-Tech x 3", ajustada)
+        self.assertNotIn("x 1", ajustada)
+
+    def test_ajustar_quantidade_kit_simples(self):
+        desc = (
+            "SOBRE O PRODUTO\n"
+            "Descrição do termômetro.\n\n"
+            "O QUE VEM NO KIT\n"
+            "- Termômetro Clínico Digital G-Tech x 1\n\n"
+            "IDEAL PARA\n"
+            "Uso doméstico."
+        )
+        ajustada = ajustar_descricao_quantidade(desc, quantidade=3)
+        self.assertIn("- Termômetro Clínico Digital G-Tech x 3", ajustada)
+        self.assertNotIn("x 1", ajustada)
+
+    def test_ajustar_quantidade_variacoes_formatos(self):
+        formatos = [
+            "- Termômetro Digital x 1 unidade",
+            "- 1x Termômetro Digital",
+            "- Termômetro Digital - 1 Unidade",
+            "- Termômetro Digital (1 unidade)",
+            "- Termômetro Digital",
+            "• Termômetro Digital x 1",
+        ]
+        for f in formatos:
+            desc = f"SOBRE O PRODUTO\nTexto.\n\nCONTEÚDO DA COMPRA\n{f}\n\nIDEAL PARA\nIdeal."
+            ajustada = ajustar_descricao_quantidade(desc, quantidade=4)
+            marcador = "•" if "•" in f else "-"
+            self.assertIn(f"{marcador} Termômetro Digital x 4", ajustada)
+
+    def test_ajustar_quantidade_kit_misto(self):
+        desc = (
+            "SOBRE O PRODUTO\n"
+            "Texto kit misto.\n\n"
+            "CONTEÚDO DA COMPRA\n"
+            "• Termômetro Digital x 1\n"
+            "• Oxímetro de Dedo x 1\n\n"
+            "IDEAL PARA\n"
+            "Ideal para clínicas."
+        )
+        ajustada = ajustar_descricao_quantidade(desc, quantidade=2)
+        self.assertIn("• Termômetro Digital x 2", ajustada)
+        self.assertIn("• Oxímetro de Dedo x 2", ajustada)
+
+    def test_injetar_secao_quando_ausente(self):
+        desc = (
+            "SOBRE O PRODUTO\n"
+            "Texto sem seção de kit.\n\n"
+            "IDEAL PARA\n"
+            "Ideal para todos."
+        )
+        ajustada = ajustar_descricao_quantidade(desc, quantidade=3, nome_produto="Termômetro Clínico Digital")
+        self.assertIn("CONTEÚDO DA COMPRA", ajustada)
+        self.assertIn("• Termômetro Clínico Digital x 3", ajustada)
+        self.assertTrue(ajustada.index("CONTEÚDO DA COMPRA") < ajustada.index("IDEAL PARA"))

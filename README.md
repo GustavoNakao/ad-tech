@@ -137,7 +137,7 @@ Orquestrador de agentes de IA especializados. Usa **Gemini 2.5 Flash** para Comp
 | **Agente 2A — Título Unitário** | Gemini 2.5 Flash | Gera 1 título otimizado (55–60 chars) |
 | **Agente 2B — Grade de Títulos** | Gemini 2.5 Flash | Gera 8 títulos base (t1_a→t4_b) |
 | **Agente 4 — Ficha Técnica** | Groq Llama 3.3 70B | Extrai/infere atributos técnicos |
-| **Agente 5 — Keywords** | Groq Llama 3.1 8B | Gera lista de palavras-chave SEO |
+| **Agente 5 — Keywords** | Groq Llama 3.2 3B | Gera lista de palavras-chave SEO |
 | **Agente 6 — Descrição** | Gemini 2.5 Flash | Cria descrição completa com 5 seções |
 
 ### Regras do Agente 1 — Compliance

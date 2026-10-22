@@ -192,12 +192,75 @@ class BaselinkerClient:
             return []
 
     @staticmethod
-    def _extrair_ncm(features_internas: dict, text_fields: dict) -> str:
-        # 1. features dentro de text_fields (estrutura real do BaseLinker)
+    def _normalizar_features(features_raw) -> dict:
+        """Normaliza as variadas estruturas de features do BaseLinker em um dict simples key -> value."""
+        resultado = {}
+        if not features_raw:
+            return resultado
+
+        if isinstance(features_raw, dict):
+            for k, v in features_raw.items():
+                if isinstance(v, str):
+                    resultado[str(k).strip()] = v.strip()
+                elif isinstance(v, (list, tuple)) and len(v) >= 2:
+                    resultado[str(v[0]).strip()] = str(v[1]).strip()
+                elif isinstance(v, dict):
+                    nome = v.get("name") or v.get("nome") or k
+                    valor = v.get("value") or v.get("valor") or ""
+                    if nome and valor:
+                        resultado[str(nome).strip()] = str(valor).strip()
+        elif isinstance(features_raw, (list, tuple)):
+            for item in features_raw:
+                if isinstance(item, (list, tuple)) and len(item) >= 2:
+                    resultado[str(item[0]).strip()] = str(item[1]).strip()
+                elif isinstance(item, dict):
+                    nome = item.get("name") or item.get("nome")
+                    valor = item.get("value") or item.get("valor")
+                    if nome and valor:
+                        resultado[str(nome).strip()] = str(valor).strip()
+        return resultado
+
+    def get_mapa_fabricantes(self, inventory_id: int = 24542) -> Dict[int, str]:
+        """Busca o mapa id -> nome dos fabricantes registrados no inventário do BaseLinker."""
+        from django.core.cache import cache
+        cache_key = f"bl_manufacturers_{inventory_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            resp = self._request("getInventoryManufacturers", {"inventory_id": inventory_id})
+            mans = resp.get("manufacturers", [])
+            mapa = {}
+            if isinstance(mans, list):
+                for m in mans:
+                    if isinstance(m, dict) and "manufacturer_id" in m and "name" in m:
+                        mapa[int(m["manufacturer_id"])] = str(m["name"]).strip()
+            elif isinstance(mans, dict):
+                for k, v in mans.items():
+                    if isinstance(v, dict) and "name" in v:
+                        mapa[int(k)] = str(v["name"]).strip()
+                    elif isinstance(v, str):
+                        mapa[int(k)] = v.strip()
+
+            cache.set(cache_key, mapa, timeout=3600)  # Cache por 1 hora
+            return mapa
+        except Exception as e:
+            logger.error("Erro ao obter fabricantes do BaseLinker: %s", e)
+            return {}
+
+    def _extrair_ncm(self, features_internas: dict, text_fields: dict, dados: Optional[dict] = None) -> str:
+        features_combinadas = {}
+        if dados and dados.get("features"):
+            features_combinadas.update(self._normalizar_features(dados.get("features")))
+        if features_internas:
+            features_combinadas.update(self._normalizar_features(features_internas))
+
+        # 1. features (estrutura real do BaseLinker)
         for chave in ("NCM", "ncm", "Ncm"):
-            valor = str(features_internas.get(chave, "")).strip()
+            valor = str(features_combinadas.get(chave, "")).strip()
             if valor:
-                logger.debug("NCM encontrado em text_fields[features][%s]: %s", chave, valor)
+                logger.debug("NCM encontrado em features[%s]: %s", chave, valor)
                 return valor
 
         # 2. Varre text_fields pelo formato numérico de NCM
@@ -220,18 +283,32 @@ class BaselinkerClient:
 
         return ""
 
-    @staticmethod
-    def _extrair_marca(features_internas: dict, text_fields: dict, dados: dict) -> str:
+    def _extrair_marca(self, features_internas: dict, text_fields: dict, dados: dict, inventory_id: int = 24542) -> str:
+        # 1. Tenta resolver via manufacturer_id (campo oficial de Fabricante no BaseLinker)
+        m_id = dados.get("manufacturer_id")
+        if m_id and int(m_id) > 0:
+            mapa = self.get_mapa_fabricantes(inventory_id)
+            nome_fab = mapa.get(int(m_id))
+            if nome_fab:
+                logger.debug("Marca encontrada via manufacturer_id %s: %s", m_id, nome_fab)
+                return nome_fab
+
         nomes = ("Marca", "marca", "Brand", "brand", "Fabricante", "fabricante", "Fornecedor", "fornecedor")
 
-        # 1. features dentro de text_fields
+        # 2. Normaliza e combina features (raiz e text_fields)
+        features_combinadas = {}
+        if dados and dados.get("features"):
+            features_combinadas.update(self._normalizar_features(dados.get("features")))
+        if features_internas:
+            features_combinadas.update(self._normalizar_features(features_internas))
+
         for chave in nomes:
-            valor = str(features_internas.get(chave, "")).strip()
+            valor = str(features_combinadas.get(chave, "")).strip()
             if valor:
-                logger.debug("Marca encontrada em text_fields[features][%s]: %s", chave, valor)
+                logger.debug("Marca encontrada em features[%s]: %s", chave, valor)
                 return valor
 
-        # 2. Varre text_fields pela chave
+        # 3. Varre text_fields pela chave de marca/brand/fabricante/fornecedor
         for chave, valor in text_fields.items():
             if any(k in str(chave).lower() for k in ("marca", "brand", "fabricante", "fornecedor")):
                 v = str(valor).strip()
@@ -291,8 +368,8 @@ class BaselinkerClient:
                 sku, dados.get("manufacturer_name"), features_raiz, features_internas,
             )
 
-            ncm           = self._extrair_ncm(features_internas, text_fields)
-            marca         = self._extrair_marca(features_internas, text_fields, dados)
+            ncm           = self._extrair_ncm(features_internas, text_fields, dados)
+            marca         = self._extrair_marca(features_internas, text_fields, dados, inventory_id)
             codigo_origem = self._extrair_codigo_origem(features_internas, text_fields)
 
             logger.info("SKU %s resolvido | NCM=%s | Marca=%s | Origem=%s",

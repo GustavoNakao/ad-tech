@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R831 — Kits Título Manual</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:       #080c12;
+            --surface:  #0e1520;
+            --surface2: #141d2b;
+            --border:   rgba(255,255,255,0.07);
+            --border2:  rgba(255,255,255,0.13);
+            --cyan:     #00c8ff;
+            --cyan-dim: rgba(0,200,255,0.10);
+            --text:     #e8edf5;
+            --muted:    #5a6a80;
+            --success:  #00e599;
+            --danger:   #ff4d6d;
+            --warn:     #ffc14d;
+            --purple:   #a78bfa;
+            --fh:       'Syne', sans-serif;
+            --fm:       'Inter', 'Segoe UI', sans-serif;
+            --fn:       'JetBrains Mono', 'SFMono-Regular', monospace;
+        }
+
+        body { background:var(--bg); color:var(--text); font-family:var(--fm); font-size:13px; min-height:100vh; line-height:1.6; }
+
+        body::after {
+            content:''; position:fixed; top:-180px; left:50%; transform:translateX(-50%);
+            width:600px; height:360px;
+            background:radial-gradient(ellipse, rgba(0,200,255,0.05) 0%, transparent 70%);
+            pointer-events:none; z-index:0;
+        }
+
+        .wrap { position:relative; z-index:1; max-width:960px; margin:0 auto; padding:0 24px 64px; }
+
+        /* NAV */
+        nav { position:sticky; top:0; z-index:100; background:rgba(8,12,18,0.92); backdrop-filter:blur(16px); border-bottom:1px solid var(--border); padding:0 24px; }
+        .nav-in { max-width:960px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; height:58px; }
+        .brand { display:flex; align-items:center; gap:10px; font-family:var(--fh); font-weight:800; font-size:15px; color:var(--text); text-decoration:none; }
+        .logo { width:28px; height:28px; border-radius:6px; background:linear-gradient(135deg,#00c8ff,#006bcc); display:flex; align-items:center; justify-content:center; }
+        .logo i { font-size:12px; color:#050810; }
+        .brand-sep { color:var(--muted); font-weight:400; font-size:12px; }
+        .nav-r { display:flex; align-items:center; gap:12px; }
+        .pill-warn { display:flex; align-items:center; gap:6px; background:rgba(255,193,77,0.07); border:1px solid rgba(255,193,77,0.25); color:var(--warn); padding:4px 12px; border-radius:20px; font-size:11px; }
+        .nav-user { font-size:11px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+        .nav-user a { color:var(--muted); text-decoration:none; border:1px solid var(--border2); padding:3px 10px; border-radius:6px; transition:all .2s; font-size:11px; }
+        .nav-user a:hover { color:var(--text); background:rgba(255,255,255,.04); }
+
+        /* PAGE HEADER */
+        .ph { padding:32px 0 22px; }
+        .ph h1 { font-family:var(--fh); font-size:22px; font-weight:800; letter-spacing:-.4px; margin-bottom:4px; }
+        .ph h1 span { color:var(--warn); }
+        .ph p { color:var(--muted); font-size:12px; margin-top:4px; }
+        .ph-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(255,193,77,0.08); border:1px solid rgba(255,193,77,0.2); color:var(--warn); padding:3px 10px; border-radius:12px; font-size:10px; font-weight:600; letter-spacing:.04em; margin-bottom:8px; }
+
+        /* CARD */
+        .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; margin-bottom:16px; }
+        .ch { display:flex; align-items:center; justify-content:space-between; padding:18px 20px 0; }
+        .ch h2 { font-family:var(--fh); font-size:13px; font-weight:700; display:flex; align-items:center; gap:7px; }
+        .ch h2 i { color:var(--cyan); font-size:11px; }
+        .cb { padding:16px 20px 20px; }
+
+        /* FORM */
+        .fg { margin-bottom:14px; }
+        .fl { display:block; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:6px; font-weight:500; }
+        .fi { width:100%; background:#060a10; border:1px solid var(--border2); border-radius:9px; color:var(--text); font-family:var(--fm); font-size:14px; padding:11px 13px; outline:none; transition:border-color .2s,box-shadow .2s; }
+        .fi::placeholder{color:var(--muted)}
+        .fi:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,200,255,.08)}
+        .fi.warn-input { border-color: var(--warn); }
+
+        .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+        /* CONTADOR */
+        .fi-wrap { position:relative; }
+        .char-count { position:absolute; right:12px; top:50%; transform:translateY(-50%); font-family:var(--fn); font-size:10px; color:var(--muted); pointer-events:none; }
+        .char-count.over { color:var(--danger); font-weight:700; }
+
+        /* BOTÕES */
+        .btn-preview { width:100%; padding:10px; background:transparent; border:1px solid rgba(0,200,255,.3); border-radius:9px; color:var(--cyan); font-family:var(--fh); font-size:12px; font-weight:700; cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:10px; }
+        .btn-preview:hover { background:rgba(0,200,255,.07); border-color:var(--cyan); }
+        .btn-criar { width:100%; padding:12px; background:linear-gradient(135deg,#00c8ff,#007acc); border:none; border-radius:9px; color:#050810; font-family:var(--fh); font-size:13px; font-weight:700; cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:8px; }
+        .btn-criar:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 22px -4px rgba(0,200,255,.3)}
+        .btn-criar:disabled { pointer-events:none; opacity:.5; }
+
+        .hint { margin-top:12px; background:rgba(0,200,255,.04); border:1px solid rgba(0,200,255,.1); border-radius:8px; padding:10px 13px; font-size:11px; color:var(--muted); display:flex; gap:8px; }
+        .hint i{color:var(--cyan);margin-top:1px;flex-shrink:0}
+
+        /* ALERTS */
+        .alerts{margin-bottom:16px}
+        .alert{display:flex;align-items:flex-start;gap:10px;padding:12px 15px;border-radius:10px;border-left:3px solid;margin-bottom:8px;background:var(--surface2);position:relative;}
+        .alert i{margin-top:1px;flex-shrink:0;font-size:12px}
+        .as{border-color:var(--success)}.as i{color:var(--success)}
+        .ae{border-color:var(--danger)}.ae i{color:var(--danger)}
+        .aw{border-color:var(--warn)}.aw i{color:var(--warn)}
+        .ax{position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;padding:4px}
+
+        /* PREVIEW DE TÍTULOS */
+        .preview-card { background:var(--surface2); border:1px solid rgba(0,200,255,.15); border-radius:12px; padding:18px 20px; margin-bottom:16px; }
+        .preview-title { font-family:var(--fh); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--cyan); margin-bottom:14px; display:flex; align-items:center; gap:7px; }
+        .preview-row { display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border); gap:12px; }
+        .preview-row:last-child { border-bottom:none; }
+        .preview-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); min-width:90px; flex-shrink:0; }
+        .preview-titulo { font-family:var(--fn); font-size:12px; color:var(--text); flex:1; word-break:break-word; }
+        .preview-chars { font-family:var(--fn); font-size:10px; padding:2px 7px; border-radius:8px; flex-shrink:0; }
+        .preview-chars.ok  { background:rgba(0,229,153,.1); color:var(--success); border:1px solid rgba(0,229,153,.2); }
+        .preview-chars.mid { background:rgba(255,193,77,.1); color:var(--warn); border:1px solid rgba(255,193,77,.2); }
+        .preview-chars.low { background:rgba(255,77,109,.1); color:var(--danger); border:1px solid rgba(255,77,109,.2); }
+
+        /* TOGGLE EAN */
+        .toggle-ean { display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none; }
+        .toggle-ean input[type=checkbox] { width:16px; height:16px; accent-color:var(--cyan); cursor:pointer; }
+        .toggle-ean span { font-size:12px; color:var(--muted); }
+        .toggle-ean span b { color:var(--cyan); }
+
+        @keyframes fu { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+        .card { animation:fu .4s ease both; }
+        .preview-card { animation:fu .3s ease both; }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-in">
+        <a href="{% url 'painel_kits' %}" class="brand">
+            <div class="logo"><i class="fa-solid fa-bolt"></i></div>
+            R831 <span class="brand-sep">/ Kits · Título Manual</span>
+        </a>
+        <div class="nav-r">
+            <div class="pill-warn"><i class="fa-solid fa-clock-rotate-left" style="font-size:9px"></i> Modo Temporário</div>
+            <div class="nav-user">
+                <a href="{% url 'painel_kits' %}"><i class="fa-solid fa-arrow-left" style="font-size:9px"></i> Painel Principal</a>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<div class="wrap">
+    <div class="ph">
+        <div class="ph-badge"><i class="fa-solid fa-triangle-exclamation" style="font-size:9px"></i> TEMPORÁRIO — SERÁ REMOVIDO</div>
+        <h1>Kits com <span>Título Manual</span></h1>
+        <p>Informe o título já ranqueado no Mercado Livre. O sistema usa exatamente esse título para os anúncios unitários e deriva automaticamente os títulos de Kit 2, Kit 3 e Kit 4.</p>
+    </div>
+
+    <!-- ALERTS -->
+    {% if messages %}
+    <div class="alerts">
+        {% for msg in messages %}
+        <div class="alert {% if msg.tags == 'success' %}as{% elif msg.tags == 'warning' %}aw{% else %}ae{% endif %}">
+            <i class="fa-solid {% if msg.tags == 'success' %}fa-circle-check{% elif msg.tags == 'warning' %}fa-triangle-exclamation{% else %}fa-circle-xmark{% endif %}"></i>
+            <span>{{ msg }}</span>
+            <button class="ax" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- PREVIEW DE TÍTULOS DERIVADOS -->
+    {% if preview %}
+    <div class="preview-card">
+        <div class="preview-title"><i class="fa-solid fa-eye"></i> Pré-visualização dos Títulos Derivados</div>
+
+        {% for chave, titulo in preview.items %}
+        {% with n=titulo|length %}
+        <div class="preview-row">
+            <span class="preview-label">{{ chave }}</span>
+            <span class="preview-titulo">{{ titulo }}</span>
+            <span class="preview-chars {% if n >= 53 %}ok{% elif n >= 45 %}mid{% else %}low{% endif %}">{{ n }}/60</span>
+        </div>
+        {% endwith %}
+        {% endfor %}
+
+        <div class="hint" style="margin-top:12px;">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>✅ Verde = 53–60 chars (ideal) · 🟡 Amarelo = 45–52 chars (aceitável) · 🔴 Vermelho = abaixo de 45 chars (recomenda reescrever o título base)</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- FORMULÁRIO -->
+    <div class="card">
+        <div class="ch">
+            <h2><i class="fa-solid fa-pen-to-square"></i> Dados do Produto</h2>
+        </div>
+        <div class="cb">
+
+            <!-- TÍTULOS + PREVIEW -->
+            <form method="post" id="form-preview">
+                {% csrf_token %}
+                <input type="hidden" name="acao" value="preview">
+
+                <div style="background:rgba(0,200,255,0.04);border:1px solid rgba(0,200,255,0.1);border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:11px;color:var(--muted);line-height:1.6;">
+                    <i class="fa-solid fa-circle-info" style="color:var(--cyan);margin-right:5px;"></i>
+                    <strong style="color:var(--text);">Variações 2/3/4 são opcionais.</strong>
+                    Se deixar em branco, o sistema deriva automaticamente com prefixo <code style="color:var(--cyan);background:rgba(0,200,255,0.08);padding:1px 5px;border-radius:4px;">Kit N</code>.
+                    Para produtos com número embutido (ex: Kit 24 / 48 / 72 / 96), preencha todos os 4 campos.
+                </div>
+
+                <!-- Título Unitário -->
+                <div class="fg">
+                    <label class="fl">
+                        <i class="fa-solid fa-circle-1" style="color:var(--cyan);font-size:10px;"></i>
+                        Título Unitário (Variação 1) <span style="color:var(--danger)">*</span>
+                    </label>
+                    <div class="fi-wrap">
+                        <input type="text" name="titulo_manual" id="id_t1"
+                               class="fi" maxlength="70"
+                               value="{{ form.titulo_manual|default:'' }}"
+                               placeholder="Ex: Kit 24 Feltro Protetor Adesivo Pé Sofá Tekbond"
+                               autocomplete="off">
+                        <span class="char-count" id="cnt_t1">0/60</span>
+                    </div>
+                </div>
+
+                <!-- Título Variação 2 -->
+                <div class="fg">
+                    <label class="fl">
+                        <i class="fa-solid fa-circle-2" style="color:var(--muted);font-size:10px;"></i>
+                        Título Variação 2
+                        <span style="color:var(--muted);font-size:9px;font-weight:400;margin-left:4px;">(deixe em branco para derivar automaticamente)</span>
+                    </label>
+                    <div class="fi-wrap">
+                        <input type="text" name="titulo_kit2" id="id_t2"
+                               class="fi" maxlength="70"
+                               value="{{ form.titulo_kit2|default:'' }}"
+                               placeholder="Ex: Kit 48 Feltro Protetor Adesivo Pé Sofá Tekbond"
+                               autocomplete="off">
+                        <span class="char-count" id="cnt_t2">0/60</span>
+                    </div>
+                </div>
+
+                <!-- Título Variação 3 -->
+                <div class="fg">
+                    <label class="fl">
+                        <i class="fa-solid fa-circle-3" style="color:var(--muted);font-size:10px;"></i>
+                        Título Variação 3
+                        <span style="color:var(--muted);font-size:9px;font-weight:400;margin-left:4px;">(deixe em branco para derivar automaticamente)</span>
+                    </label>
+                    <div class="fi-wrap">
+                        <input type="text" name="titulo_kit3" id="id_t3"
+                               class="fi" maxlength="70"
+                               value="{{ form.titulo_kit3|default:'' }}"
+                               placeholder="Ex: Kit 72 Feltro Protetor Adesivo Pé Sofá Tekbond"
+                               autocomplete="off">
+                        <span class="char-count" id="cnt_t3">0/60</span>
+                    </div>
+                </div>
+
+                <!-- Título Variação 4 -->
+                <div class="fg">
+                    <label class="fl">
+                        <i class="fa-solid fa-circle-4" style="color:var(--muted);font-size:10px;"></i>
+                        Título Variação 4
+                        <span style="color:var(--muted);font-size:9px;font-weight:400;margin-left:4px;">(deixe em branco para derivar automaticamente)</span>
+                    </label>
+                    <div class="fi-wrap">
+                        <input type="text" name="titulo_kit4" id="id_t4"
+                               class="fi" maxlength="70"
+                               value="{{ form.titulo_kit4|default:'' }}"
+                               placeholder="Ex: Kit 96 Feltro Protetor Adesivo Pé Sofá Tekbond"
+                               autocomplete="off">
+                        <span class="char-count" id="cnt_t4">0/60</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-preview" id="btn-preview">
+                    <i class="fa-solid fa-magnifying-glass"></i> Pré-visualizar os 8 Títulos da Grade
+                </button>
+            </form>
+
+
+            <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+
+            <!-- CRIAÇÃO -->
+            <form method="post" id="form-criacao">
+                {% csrf_token %}
+                <input type="hidden" name="acao" value="confirmar_criacao">
+                <!-- Sincroniza os 4 títulos digitados acima -->
+                <input type="hidden" name="titulo_manual" id="h_t1" value="{{ form.titulo_manual|default:'' }}">
+                <input type="hidden" name="titulo_kit2"   id="h_t2" value="{{ form.titulo_kit2|default:'' }}">
+                <input type="hidden" name="titulo_kit3"   id="h_t3" value="{{ form.titulo_kit3|default:'' }}">
+                <input type="hidden" name="titulo_kit4"   id="h_t4" value="{{ form.titulo_kit4|default:'' }}">
+
+                <div class="fg">
+                    <label class="fl" style="display:flex;align-items:center;gap:5px;">
+                        <i class="fa-solid fa-barcode" style="color:#00c8ff;font-size:10px;"></i>
+                        SKU do Produto (BaseLinker)
+                        <span style="font-size:9px;color:#ff4d6d;margin-left:4px;">(obrigatório)</span>
+                    </label>
+                    <input type="text" name="sku_manual" class="fi"
+                           value="{{ form.sku_manual|default:'' }}"
+                           placeholder="Ex: 30480" autocomplete="off">
+                </div>
+
+                <div class="fg">
+                    <label class="fl" style="display:flex;align-items:center;gap:5px;">
+                        <i class="fa-solid fa-sitemap" style="color:#00c8ff;"></i>
+                        Árvore da Categoria ou URL do ML
+                        <span style="font-size:9px;color:#ff4d6d;margin-left:4px;">(obrigatório)</span>
+                    </label>
+                    <input type="text" name="categoria_ml" id="id_categoria_ml" class="fi"
+                           value="{{ form.categoria_ml|default:'' }}"
+                           placeholder="Ex: Casa, Móveis e Decoração / Banheiros / Sifões (ou MLB277472)" autocomplete="off">
+                </div>
+
+                <div class="fg">
+                    <label class="fl" style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+                        <span style="display:inline-flex;align-items:center;gap:5px;">
+                            <i class="fa-solid fa-barcode" style="color:#00c8ff;"></i>
+                            Código GPC (Global Product Classification)
+                        </span>
+                        <a href="https://gpc.gs1.org/" target="_blank" style="color:#00c8ff;text-decoration:none;font-size:10px;display:inline-flex;align-items:center;gap:4px;">
+                            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:9px;"></i> Pesquisar GPC
+                        </a>
+                    </label>
+                    <input type="text" name="gpc_manual" class="fi" maxlength="8" pattern="\d{8}"
+                           value="{{ form.gpc_manual|default:'' }}"
+                           placeholder="Ex: 10000510 (8 dígitos)" autocomplete="off">
+                </div>
+
+                <label class="toggle-ean" style="margin-bottom:10px;">
+                    <input type="checkbox" name="forcar_novos_gtins" {% if form.forcar_novos_gtins or form.forcar_novos_gtins is None %}checked{% endif %}>
+                    <span>Gerar <b>Novos GTINs</b> para esta Grade (não reaproveitar do mesmo SKU)</span>
+                </label>
+
+                <label class="toggle-ean" style="margin-bottom:18px;">
+                    <input type="checkbox" name="gerar_ean_unitario" {% if form.gerar_ean_unitario %}checked{% endif %}>
+                    <span>Gerar <b>Novo GTIN</b> para o Unitário (Qtd 1)</span>
+                </label>
+
+
+                <button type="submit" class="btn-criar" id="btn-criar" disabled>
+                    <i class="fa-solid fa-layer-group"></i> Criar Grade de 8 Anúncios
+                </button>
+
+                <div class="hint">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>O botão de criação é habilitado após pré-visualizar os títulos. Descrição, ficha técnica e keywords continuam sendo geradas pela IA normalmente.</span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // ── Contadores de caracteres para os 4 campos de título ───────────────
+    const campos = [
+        { inp: document.getElementById('id_t1'), cnt: document.getElementById('cnt_t1'), hid: document.getElementById('h_t1') },
+        { inp: document.getElementById('id_t2'), cnt: document.getElementById('cnt_t2'), hid: document.getElementById('h_t2') },
+        { inp: document.getElementById('id_t3'), cnt: document.getElementById('cnt_t3'), hid: document.getElementById('h_t3') },
+        { inp: document.getElementById('id_t4'), cnt: document.getElementById('cnt_t4'), hid: document.getElementById('h_t4') },
+    ];
+
+    campos.forEach(({ inp, cnt, hid }) => {
+        function atualizar() {
+            const n = inp.value.length;
+            cnt.textContent = n + '/60';
+            cnt.className   = n > 60 ? 'char-count over' : 'char-count';
+            inp.classList.toggle('warn-input', n > 60);
+            hid.value = inp.value;
+        }
+        inp.addEventListener('input', atualizar);
+        atualizar(); // inicializa
+    });
+
+    const btnCriar = document.getElementById('btn-criar');
+
+    // ── Habilita botão Criar após preview bem-sucedido ────────────────────
+    {% if preview %}
+    btnCriar.disabled = false;
+    {% endif %}
+
+    // ── Sincroniza todos os títulos no submit do form de criação ──────────
+    document.getElementById('form-criacao').addEventListener('submit', function() {
+        campos.forEach(({ inp, hid }) => { hid.value = inp.value; });
+        btnCriar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Criando grade...';
+        btnCriar.disabled = true;
+    });
+</script>
+
+</body>
+</html>

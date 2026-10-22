@@ -22,6 +22,7 @@ Melhorias implementadas:
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import logging
 import time
@@ -33,6 +34,23 @@ from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger(__name__)
+
+
+def baixar_imagem_para_base64(url: str, timeout: int = 5) -> Optional[Dict[str, str]]:
+    """Baixa imagem de uma URL pública e a converte para dict com mime_type e base64."""
+    if not url or not url.startswith("http"):
+        return None
+    try:
+        resp = requests.get(url, timeout=timeout)
+        resp.raise_for_status()
+        content_type = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip().lower()
+        if not content_type.startswith("image/"):
+            content_type = "image/jpeg"
+        encoded = base64.b64encode(resp.content).decode("utf-8")
+        return {"mime_type": content_type, "data": encoded}
+    except Exception as exc:
+        logger.warning("Falha ao baixar imagem para multimodal (%s): %s", url[:60], exc)
+        return None
 
 
 class GeminiAPIError(Exception):
@@ -192,10 +210,8 @@ class GeminiClient:
     # Modelos em ordem de preferência — fallback automático se o principal falhar
     MODELOS = [
         "gemini-2.5-flash",
-        "gemini-3.1-flash-lite",
-        "gemini-2.0-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
     ]
 
     TIMEOUT       = 45
@@ -256,6 +272,33 @@ class GeminiClient:
             logger.error("❌ Gemini erro inesperado — fallback: %s", exc)
             return None
 
+    def chat_multimodal(
+        self,
+        system_prompt: str,
+        user_input:    str,
+        imagens:       Optional[List[Dict[str, str]]] = None,
+        modelo:        Optional[str] = None,
+        use_cache:     bool = True,
+    ) -> Optional[str]:
+        """Envia system_prompt + user_input + imagens (base64) para visão multimodal."""
+        try:
+            return self._gerar_com_rotacao(
+                system_prompt=system_prompt.strip(),
+                user_input=user_input.strip(),
+                imagens=imagens,
+                modelo_preferido=modelo,
+                use_cache=use_cache,
+            )
+        except GeminiRateLimitError as exc:
+            logger.warning("⚠️ Gemini multimodal: chaves esgotadas. %s", exc)
+            return None
+        except GeminiAPIError as exc:
+            logger.warning("⚠️ Gemini multimodal API erro: %s", exc)
+            return None
+        except Exception as exc:
+            logger.error("❌ Gemini multimodal erro inesperado: %s", exc)
+            return None
+
     def generate(
         self,
         prompt:    str,
@@ -292,6 +335,7 @@ class GeminiClient:
         self,
         system_prompt: str,
         user_input:    str,
+        imagens:       Optional[List[Dict[str, str]]] = None,
         modelo_preferido: Optional[str] = None,
         use_cache:     bool = True,
     ) -> str:
@@ -308,8 +352,8 @@ class GeminiClient:
         """
         pool = _get_pool()
 
-        # Cache — baseado em system+user+modelo para não misturar contextos
-        cache_key = self._cache_key(system_prompt, user_input, modelo_preferido) if use_cache else None
+        # Cache — baseado em system+user+modelo+imagens para não misturar contextos
+        cache_key = self._cache_key(system_prompt, user_input, modelo_preferido, imagens) if use_cache else None
         if cache_key:
             cached = cache.get(cache_key)
             if cached:
@@ -334,7 +378,7 @@ class GeminiClient:
             for modelo in fila_modelos:
                 try:
                     pool.registrar_uso(chave)
-                    texto = self._chamar_api(chave, modelo, system_prompt, user_input)
+                    texto = self._chamar_api(chave, modelo, system_prompt, user_input, imagens)
 
                     # Sucesso — salva no cache e retorna
                     if cache_key and texto:
@@ -377,6 +421,7 @@ class GeminiClient:
         modelo:        str,
         system_prompt: str,
         user_input:    str,
+        imagens:       Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """
         Faz a chamada HTTP para a API Gemini.
@@ -386,7 +431,7 @@ class GeminiClient:
         concatenação manual no campo user.
         """
         url     = f"{self.BASE_URL}/models/{modelo}:generateContent"
-        payload = self._montar_payload(system_prompt, user_input)
+        payload = self._montar_payload(system_prompt, user_input, imagens)
         session = self._build_session(chave)
 
         try:
@@ -431,16 +476,31 @@ class GeminiClient:
     # =========================================================================
 
     @staticmethod
-    def _montar_payload(system_prompt: str, user_input: str) -> Dict[str, Any]:
-        """
-        Monta o payload com systemInstruction e suporte a JSON Mode.
-        """
+    def _montar_payload(
+        system_prompt: str,
+        user_input: str,
+        imagens: Optional[List[Dict[str, str]]] = None,
+    ) -> Dict[str, Any]:
+        """Monta o payload com systemInstruction, partes multimodais e JSON Mode."""
+        parts: List[Dict[str, Any]] = [{"text": user_input}]
+        if imagens:
+            for img in imagens:
+                m_type = img.get("mime_type") or "image/jpeg"
+                data_b64 = img.get("data") or ""
+                if data_b64:
+                    parts.append({
+                        "inline_data": {
+                            "mime_type": m_type,
+                            "data": data_b64,
+                        }
+                    })
+
         payload: Dict[str, Any] = {
             "contents": [
-                {"role": "user", "parts": [{"text": user_input}]}
+                {"role": "user", "parts": parts}
             ],
             "generationConfig": {
-                "temperature":     0.7,
+                "temperature":     0.2,
                 "topP":            0.9,
                 "maxOutputTokens": 8192,
             },
@@ -473,8 +533,14 @@ class GeminiClient:
         return session
 
     @staticmethod
-    def _cache_key(system_prompt: str, user_input: str, modelo: Optional[str] = None) -> str:
-        conteudo = f"sys:{system_prompt}|usr:{user_input}|mod:{modelo or 'default'}"
+    def _cache_key(
+        system_prompt: str,
+        user_input: str,
+        modelo: Optional[str] = None,
+        imagens: Optional[List[Dict[str, str]]] = None,
+    ) -> str:
+        img_tag = f"|imgs:{len(imagens)}" if imagens else ""
+        conteudo = f"sys:{system_prompt}|usr:{user_input}|mod:{modelo or 'default'}{img_tag}"
         h = hashlib.sha256(conteudo.encode()).hexdigest()
         return f"gemini_v2_{h}"
 
